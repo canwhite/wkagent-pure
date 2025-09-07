@@ -5,6 +5,10 @@
 
 // 请安装OpenAI SDK: npm install openai
 import OpenAI from 'openai';
+import dotenv from 'dotenv';
+
+// 加载环境变量
+dotenv.config();
 
 class LLMClient {
   constructor(config = {}) {

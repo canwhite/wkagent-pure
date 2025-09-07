@@ -4,12 +4,8 @@
  */
 
 import { EventEmitter } from "events";
-import dotenv from "dotenv";
 import LLMClient from "./llm-client.js";
 import JSONParser from "./utils.js";
-
-// 加载环境变量
-dotenv.config();
 
 class WKAgent extends EventEmitter {
   constructor(config = {}) {
