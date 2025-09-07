@@ -1,0 +1,23 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      jsonrepair:
+        specifier: ^3.13.0
+        version: 3.13.0
+
+packages:
+
+  jsonrepair@3.13.0:
+    resolution: {integrity: sha512-5YRzlAQ7tuzV1nAJu3LvDlrKtBFIALHN2+a+I1MGJCt3ldRDBF/bZuvIPzae8Epot6KBXd0awRZZcuoeAsZ/mw==}
+    hasBin: true
+
+snapshots:
+
+  jsonrepair@3.13.0: {}

@@ -1,0 +1,30 @@
+{
+  "name": "wkagent-pure",
+  "version": "1.0.0",
+  "description": "纯LLM能力的Agent工具 - prompt输入，JSON输出",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs",
+    "test:watch": "node --watch test.mjs",
+    "example": "node example-minimal.mjs",
+    "example:minimal": "node example-minimal.mjs"
+  },
+  "keywords": [
+    "llm",
+    "agent",
+    "ai",
+    "prompt",
+    "json",
+    "frontend"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "jsonrepair": "^3.13.0",
+    "openai": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
