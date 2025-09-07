@@ -13,6 +13,11 @@ async function testComprehensiveSerialExecution() {
   console.log("=== 串行执行综合测试 ===\n");
 
   const agent = new WKAgent({
+    llm: {
+      apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+      temperature: 0.7,
+      maxTokens: 4000,
+    },
     memory: {
       compressThreshold: 20,
       enableLLMCompression: false,
@@ -42,7 +47,11 @@ async function testComprehensiveSerialExecution() {
       `\n[${data.taskIndex}/${data.totalTasks}] 📝 ${data.description}`
     );
     const status = agent.getSerialExecutionStatus();
-    console.log(`   当前进度: ${status.progress.toFixed(1)}%`);
+    if (status.progress !== undefined) {
+      console.log(`   当前进度: ${status.progress.toFixed(1)}%`);
+    } else {
+      console.log(`   当前进度: 0.0%`);
+    }
   });
 
   agent.on("serial:task:complete", (data) => {
@@ -74,14 +83,17 @@ async function testComprehensiveSerialExecution() {
   });
 
   // 测试用例: 逐步分析项目
-  const testPrompt = `请逐步分析一个Web开发项目，包含以下步骤：
+  const testPrompt = `你是一个优秀的小说家，现在我需要你完成这些工作：
   
-  1. 需求分析阶段（用户故事、功能需求、非功能需求）
-  2. 技术架构设计（前端架构、后端架构、数据库设计）  
-  3. 开发实现分析（核心功能、关键技术点、代码结构）
-  4. 测试部署策略（测试方案、部署流程、运维监控）
+  1. 如果梦境和精神力量能映射到现实，一切会有什么不一样？回答这个问题，男主文，生成大纲
+  2. 根据大纲生成场景概述
+  3. 根据场景概述提取核心人物，道具
+  4. 丰富故事大纲并产出
   
-  每个步骤都要详细说明关键考虑因素和最佳实践，最终返回结构化的JSON报告。`;
+  每个步骤都要详细说明关键考虑因素和最佳实践，最终返回结构化的JSON报告。
+  最终返回一个json，包含上述信息
+  
+  `;
 
   try {
     console.log("🎯 开始执行复杂项目分析任务...\n");
@@ -92,6 +104,7 @@ async function testComprehensiveSerialExecution() {
 
     console.log("\n=== 执行结果分析 ===");
     console.log("✅ 任务执行状态: 成功");
+    console.log("result", JSON.stringify(result));
     console.log("📋 结果类型:", result.result.type);
     console.log("🔧 执行方法:", result.result.method);
     console.log("📊 子任务数量:", result.result.subTaskCount);

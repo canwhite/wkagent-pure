@@ -1216,6 +1216,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
           subResults.push(result);
         } catch (error) {
+          console.log(
+            "[DEBUG] Caught error in task",
+            i + 1,
+            ":",
+            error.message
+          );
+          console.log("[DEBUG] Error stack:", error.stack);
+
           serialExecution.failedTasks++;
           this.emit("serial:task:error", {
             taskIndex: i + 1,
@@ -1395,7 +1403,26 @@ ${taskAnalysis.originalPrompt}`,
    * 结果汇总（增强版）
    */
   async synthesizeResults(subResults, taskAnalysis, contextAnalysis) {
+    console.log("[DEBUG] synthesizeResults called with:", {
+      subResultsCount: subResults.length,
+      subResults: subResults.map((r) => ({
+        success: r.success,
+        subTaskId: r.subTaskId,
+        hasResult: !!r.result,
+      })),
+      taskAnalysis: taskAnalysis.taskType,
+      contextAnalysis: contextAnalysis.summary,
+    });
+
     const successfulResults = subResults.filter((r) => r.success);
+
+    console.log("[DEBUG] successfulResults:", {
+      count: successfulResults.length,
+      results: successfulResults.map((r) => ({
+        subTaskId: r.subTaskId,
+        resultPreview: r.result?.substring(0, 100),
+      })),
+    });
 
     if (successfulResults.length === 0) {
       return {
@@ -1408,11 +1435,21 @@ ${taskAnalysis.originalPrompt}`,
 
     // 智能汇总：使用LLM进行结果整合
     if (successfulResults.length > 1) {
-      return await this.intelligentSynthesis(
-        successfulResults,
-        taskAnalysis,
-        contextAnalysis
-      );
+      try {
+        return await this.intelligentSynthesis(
+          successfulResults,
+          taskAnalysis,
+          contextAnalysis
+        );
+      } catch (error) {
+        console.warn("[AGENT] 智能汇总失败，使用基础汇总:", error.message);
+        // 回退到基础文本汇总
+        return this.basicTextSynthesis(
+          successfulResults,
+          taskAnalysis,
+          contextAnalysis
+        );
+      }
     }
 
     // 单结果直接返回
@@ -1422,6 +1459,7 @@ ${taskAnalysis.originalPrompt}`,
       subTaskCount: 1,
       method: "single_result",
       contextAnalysis: contextAnalysis.summary,
+      success: true,
     };
   }
 
@@ -1509,15 +1547,21 @@ ${taskAnalysis.originalPrompt}`,
   async intelligentSynthesis(successfulResults, taskAnalysis, contextAnalysis) {
     // 首先尝试从子任务结果中提取JSON数据
     const extractedResults = successfulResults.map((result) => {
-      // 尝试提取JSON数据
-      const jsonData = JSONParser.extractJSON(result.result);
-      if (jsonData) {
-        return {
-          ...result,
-          extractedJSON: jsonData,
-          resultType: "json",
-        };
+      try {
+        // 尝试提取JSON数据
+        const jsonData = JSONParser.extractJSON(result.result);
+        if (jsonData) {
+          return {
+            ...result,
+            extractedJSON: jsonData,
+            resultType: "json",
+          };
+        }
+      } catch (error) {
+        // JSON提取失败，标记为文本类型
+        console.warn("[AGENT] JSON提取失败，使用文本模式:", error.message);
       }
+
       return {
         ...result,
         resultType: "text",
@@ -1530,8 +1574,10 @@ ${taskAnalysis.originalPrompt}`,
 
     // 如果原始请求期望JSON响应，或者所有结果都是JSON，则尝试保持JSON格式
     const shouldPreserveJSON =
-      taskAnalysis.originalPrompt.toLowerCase().includes("json") ||
-      taskAnalysis.originalPrompt.toLowerCase().includes("返回json") ||
+      taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
+      taskAnalysis.originalPrompt?.toLowerCase().includes("返回json") ||
+      taskAnalysis.originalPrompt?.toLowerCase().includes("JSON") ||
+      taskAnalysis.originalPrompt?.toLowerCase().includes("返回JSON") ||
       allJSON;
 
     if (shouldPreserveJSON && hasJSON) {
