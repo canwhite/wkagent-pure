@@ -43,11 +43,11 @@ npm install
 创建 `.env` 文件：
 
 ```env
-DEEPSEEK_API_KEY=your-api-key-here
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
-LLM_MAX_TOKENS=4000
-LLM_TEMPERATURE=0.7
+NEXT_PUBLIC_DEEPSEEK_API_KEY=your-api-key-here
+NEXT_PUBLIC_LLM_BASE_URL=https://api.deepseek.com
+NEXT_PUBLIC_LLM_MODEL=deepseek-chat
+NEXT_PUBLIC_LLM_MAX_TOKENS=4000
+NEXT_PUBLIC_LLM_TEMPERATURE=0.7
 ```
 
 ### 基础使用
@@ -258,7 +258,7 @@ import WKAgent from "wkagent-pure";
 // 创建全局Agent实例（可选）
 const agent = new WKAgent({
   llm: {
-    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
     model: "deepseek-chat",
   },
 });
@@ -346,7 +346,7 @@ export default function AgentInterface() {
 在 `.env.local` 中添加：
 
 ```
-DEEPSEEK_API_KEY=your-api-key-here
+NEXT_PUBLIC_DEEPSEEK_API_KEY=your-api-key-here
 ```
 
 ### 5. 使用示例

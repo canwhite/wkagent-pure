@@ -95,6 +95,35 @@ DONE3.3: 现在任务通过我们的项目代码可以串行执行，那么他�
 了有效的信息共享，确保最终输出的一致性和完整性。
 DONE4:将当前项目的技术核心和使用方式放入 README.md
 TODO4.1: 将 import dotenv 和加载环境变量 dotenv.config()，都在 src/llm-client.js 中完成可以吗？
+TODO4.2: 将.env 的属性都设置成 NEXT_PUBLIC\_开头，所有引入的地方也修改一下
+TODO4.3 现在有个问题
+1_theme_step.tsx:133 Error creating WKAgent: OpenAIError: It looks like you're running in a browser-like environment.
 
-TODO4.2: 告诉我如何在 next 中使用该项目，搞一个专门的 md 文档放
-先完成 TODO4.1
+This is disabled by default, as it risks exposing your secret API credentials to attackers.
+If you understand the risks and have appropriate mitigations in place,
+you can set the `dangerouslyAllowBrowser` option to `true`, e.g.,
+
+new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+
+https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety
+
+    at new OpenAI (client.ts:341:13)
+    at new LLMClient (llm-client.js:25:21)
+    at new WKAgent (wkagent-pure.js:72:22)
+    at testAgent (1_theme_step.tsx:113:21)
+
+so，我想用直接请求的方式解决问题
+curl https://api.deepseek.com/chat/completions \
+ -H "Content-Type: application/json" \
+ -H "Authorization: Bearer <DeepSeek API Key>" \
+ -d '{
+"model": "deepseek-chat",
+"messages": [
+{"role": "system", "content": "You are a helpful assistant."},
+{"role": "user", "content": "Hello!"}
+],
+"stream": false
+}'
+
+TODO4.4: 告诉我如何在 next 中使用该项目，搞一个专门的 md 文档放
+先完成 TODO4.3

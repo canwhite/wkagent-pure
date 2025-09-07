@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable no-undef */
 /**
  * 极简LLM Agent - 保留三层记忆，移除context栈
  * 核心：messages[] + system prompt → LLM → 结果整合
@@ -12,27 +14,32 @@ class WKAgent extends EventEmitter {
     super();
     this.config = {
       llm: {
-        apiKey: config.llm?.apiKey || process.env.DEEPSEEK_API_KEY,
+        apiKey: config.llm?.apiKey || process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
         baseURL:
           config.llm?.baseURL ||
-          process.env.LLM_BASE_URL ||
+          process.env.NEXT_PUBLIC_LLM_BASE_URL ||
           "https://api.deepseek.com",
-        model: config.llm?.model || process.env.LLM_MODEL || "deepseek-chat",
+        model:
+          config.llm?.model ||
+          process.env.NEXT_PUBLIC_LLM_MODEL ||
+          "deepseek-chat",
         maxTokens:
-          config.llm?.maxTokens || parseInt(process.env.LLM_MAX_TOKENS) || 4000,
+          config.llm?.maxTokens ||
+          parseInt(process.env.NEXT_PUBLIC_LLM_MAX_TOKENS) ||
+          4000,
         temperature:
           config.llm?.temperature ||
-          parseFloat(process.env.LLM_TEMPERATURE) ||
+          parseFloat(process.env.NEXT_PUBLIC_LLM_TEMPERATURE) ||
           0.7,
       },
       memory: {
         maxShortTerm:
           config.memory?.maxShortTerm ||
-          parseInt(process.env.AGENT_MAX_SHORT_TERM) ||
+          parseInt(process.env.NEXT_PUBLIC_AGENT_MAX_SHORT_TERM) ||
           20,
         compressThreshold:
           config.memory?.compressThreshold ||
-          parseInt(process.env.AGENT_COMPRESS_THRESHOLD) ||
+          parseInt(process.env.NEXT_PUBLIC_AGENT_COMPRESS_THRESHOLD) ||
           15,
         maxMediumTerm: config.memory?.maxMediumTerm || 30,
         tokenThreshold: 0.92, // 92% token使用率触发压缩
@@ -44,7 +51,7 @@ class WKAgent extends EventEmitter {
       task: {
         maxSubTasks:
           config.task?.maxSubTasks ||
-          parseInt(process.env.AGENT_MAX_SUB_TASKS) ||
+          parseInt(process.env.NEXT_PUBLIC_AGENT_MAX_SUB_TASKS) ||
           5,
         enableConcurrency: config.task?.enableConcurrency !== false,
         enableSmartDecomposition: true, // 启用智能任务分解
@@ -96,7 +103,7 @@ class WKAgent extends EventEmitter {
     });
 
     this.on("task:complete", (taskId, result) => {
-      console.log(`[AGENT] 任务完成: ${taskId}`);
+      console.log(`[AGENT] 任务完成: ${taskId},result:${result}`);
     });
 
     this.on("memory:compress", (data) => {
@@ -636,7 +643,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         confidence: 0.95,
       },
       {
-        pattern: /^\d+\s*[*+\-\/]\s*\d+\s*=\s*\?*$/i,
+        pattern: /^\d+\s*[*+\-/]\s*\d+\s*=\s*\?*$/i,
         type: "calculation",
         complexity: "low",
         confidence: 0.98,

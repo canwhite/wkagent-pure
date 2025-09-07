@@ -21,8 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^17.2.2",
-    "jsonrepair": "^3.13.0",
-    "openai": "^4.0.0"
+    "jsonrepair": "^3.13.0"
   },
   "engines": {
     "node": ">=14.0.0"

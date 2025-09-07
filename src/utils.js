@@ -23,6 +23,7 @@ class JSONParser {
     try {
       return JSON.parse(cleanedText);
     } catch (e) {
+      console.log(e);
       // 继续尝试其他方法
     }
 
@@ -33,10 +34,12 @@ class JSONParser {
       try {
         return JSON.parse(match[1].trim());
       } catch (e) {
+        console.log(e);
         // 尝试修复
         try {
           return JSON.parse(jsonrepair(match[1].trim()));
         } catch (repairError) {
+          console.log("repairError", repairError);
           continue;
         }
       }
@@ -46,24 +49,24 @@ class JSONParser {
     const objectRegex = /\{[\s\S]*\}/;
     const arrayRegex = /\[[\s\S]*\]/;
 
-    let jsonMatch =
-      cleanedText.match(objectRegex) || cleanedText.match(arrayRegex);
+    let jsonMatch = cleanedText.match(objectRegex) || cleanedText.match(arrayRegex);
     if (jsonMatch) {
       try {
         return JSON.parse(jsonrepair(jsonMatch[0]));
       } catch (e) {
         // 继续尝试
+        console.log(e);
       }
     }
 
     // 方法3: 查找键值对模式
-    const keyValueRegex =
-      /"[^"]*"\s*:\s*("[^"]*"|\d+|true|false|null|\{[^}]*\}|\[[^\]]*\])/g;
+    const keyValueRegex = /"[^"]*"\s*:\s*("[^"]*"|\d+|true|false|null|\{[^}]*\}|\[[^\]]*\])/g;
     const hasKeyValue = keyValueRegex.test(cleanedText);
     if (hasKeyValue) {
       try {
         return JSON.parse(jsonrepair(cleanedText));
       } catch (e) {
+        console.log(e);
         // 最终尝试提取最可能的JSON部分
         return this.extractBestJSON(cleanedText);
       }
@@ -92,10 +95,7 @@ class JSONParser {
         stack.push(text[i]);
       } else if ((text[i] === "}" || text[i] === "]") && stack.length > 0) {
         const open = stack.pop();
-        if (
-          (open === "{" && text[i] === "}") ||
-          (open === "[" && text[i] === "]")
-        ) {
+        if ((open === "{" && text[i] === "}") || (open === "[" && text[i] === "]")) {
           if (stack.length === 0 && start !== -1) {
             const jsonStr = text.substring(start, i + 1);
             try {
@@ -105,6 +105,7 @@ class JSONParser {
                 maxDepth = stack.length + 1;
               }
             } catch (e) {
+              console.log(e);
               continue;
             }
           }
@@ -145,7 +146,7 @@ class JSONParser {
       return {
         success: false,
         data: fallback,
-        error: "Failed to extract valid JSON",
+        error: "Failed to extract valid JSON"
       };
     }
   }
@@ -173,14 +174,8 @@ class JSONParser {
         const value = data[key];
         const type = config.type;
 
-        if (
-          type &&
-          typeof value !== type &&
-          !(type === "array" && Array.isArray(value))
-        ) {
-          errors.push(
-            `Invalid type for ${key}: expected ${type}, got ${typeof value}`
-          );
+        if (type && typeof value !== type && !(type === "array" && Array.isArray(value))) {
+          errors.push(`Invalid type for ${key}: expected ${type}, got ${typeof value}`);
         }
 
         if (config.validate && !config.validate(value)) {
@@ -191,7 +186,7 @@ class JSONParser {
 
     return {
       valid: errors.length === 0,
-      errors: errors.length > 0 ? errors : null,
+      errors: errors.length > 0 ? errors : null
     };
   }
 
@@ -212,6 +207,7 @@ class JSONParser {
         const obj = JSON.parse(jsonrepair(match));
         results.push(obj);
       } catch (e) {
+        console.log(e);
         continue;
       }
     }
