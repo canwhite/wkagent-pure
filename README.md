@@ -53,7 +53,7 @@ LLM_TEMPERATURE=0.7
 ### 基础使用
 
 ```javascript
-import WKAgent from "./wkagent-pure.js";
+import WKAgent from "./src/index.js";
 
 // 创建Agent实例
 const agent = new WKAgent({

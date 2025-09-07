@@ -3,7 +3,7 @@
  */
 
 import dotenv from "dotenv";
-import WKAgent from "./wkagent-pure.js";
+import WKAgent from "./src/index.js";
 
 dotenv.config();
 

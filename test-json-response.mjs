@@ -4,8 +4,7 @@
  */
 
 import dotenv from "dotenv";
-import WKAgent from "./wkagent-pure.js";
-import JSONParser from "./utils.js";
+import { WKAgent, JSONParser } from "./src/index.js";
 
 // 加载环境变量
 dotenv.config();
