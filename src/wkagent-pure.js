@@ -165,6 +165,7 @@ class WKAgent extends EventEmitter {
         }
       } else {
         // Node.js环境 - 使用内存模拟（实际项目中可使用文件存储）
+        // TODO，node env
         console.log("[AGENT] 运行在Node.js环境，使用内存模拟持久化");
       }
     } catch (error) {
