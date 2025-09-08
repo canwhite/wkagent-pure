@@ -16,21 +16,12 @@ class WKAgent extends EventEmitter {
       llm: {
         apiKey: config.llm?.apiKey || process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
         baseURL:
-          config.llm?.baseURL ||
-          process.env.NEXT_PUBLIC_LLM_BASE_URL ||
-          "https://api.deepseek.com",
-        model:
-          config.llm?.model ||
-          process.env.NEXT_PUBLIC_LLM_MODEL ||
-          "deepseek-chat",
+          config.llm?.baseURL || process.env.NEXT_PUBLIC_LLM_BASE_URL || "https://api.deepseek.com",
+        model: config.llm?.model || process.env.NEXT_PUBLIC_LLM_MODEL || "deepseek-chat",
         maxTokens:
-          config.llm?.maxTokens ||
-          parseInt(process.env.NEXT_PUBLIC_LLM_MAX_TOKENS) ||
-          4000,
+          config.llm?.maxTokens || parseInt(process.env.NEXT_PUBLIC_LLM_MAX_TOKENS) || 4000,
         temperature:
-          config.llm?.temperature ||
-          parseFloat(process.env.NEXT_PUBLIC_LLM_TEMPERATURE) ||
-          0.7,
+          config.llm?.temperature || parseFloat(process.env.NEXT_PUBLIC_LLM_TEMPERATURE) || 0.7
       },
       memory: {
         maxShortTerm:
@@ -45,27 +36,23 @@ class WKAgent extends EventEmitter {
         tokenThreshold: 0.92, // 92% token使用率触发压缩
         enableLLMCompression: config.memory?.enableLLMCompression !== false, // 默认启用
         enablePersistence: config.memory?.enablePersistence !== false, // 默认启用
-        persistenceKey:
-          config.memory?.persistenceKey || "wkagent-longterm-memory",
+        persistenceKey: config.memory?.persistenceKey || "wkagent-longterm-memory"
       },
       task: {
         maxSubTasks:
-          config.task?.maxSubTasks ||
-          parseInt(process.env.NEXT_PUBLIC_AGENT_MAX_SUB_TASKS) ||
-          5,
+          config.task?.maxSubTasks || parseInt(process.env.NEXT_PUBLIC_AGENT_MAX_SUB_TASKS) || 5,
         enableConcurrency: config.task?.enableConcurrency !== false,
         enableSmartDecomposition: true, // 启用智能任务分解
         errorHandling: config.task?.errorHandling || "stop_on_error", // 错误处理策略: stop_on_error, continue_on_error
         sequentialDelay: config.task?.sequentialDelay || 0, // 串行执行时任务间延迟(毫秒)
         enableProgressTracking: true, // 启用进度跟踪
-        enableExecutionControl: true, // 启用执行控制(暂停/恢复/取消)
+        enableExecutionControl: true // 启用执行控制(暂停/恢复/取消)
       },
       context: {
         enableHistoryAnalysis: config.context?.enableHistoryAnalysis !== false, // 默认启用
-        enableContextInjection:
-          config.context?.enableContextInjection !== false, // 默认启用
-        maxContextMessages: config.context?.maxContextMessages || 50, // 最大上下文消息数
-      },
+        enableContextInjection: config.context?.enableContextInjection !== false, // 默认启用
+        maxContextMessages: config.context?.maxContextMessages || 50 // 最大上下文消息数
+      }
     };
 
     // 三层记忆系统 - 基于Claude.md模式增强
@@ -78,7 +65,7 @@ class WKAgent extends EventEmitter {
       totalMessages: 0,
       compressionsCount: 0,
       lastCompressionTime: 0,
-      tokenUsage: 0,
+      tokenUsage: 0
     };
 
     // 子代理管理
@@ -122,15 +109,11 @@ class WKAgent extends EventEmitter {
 
     // 串行执行事件处理
     this.on("serial:start", (data) => {
-      console.log(
-        `[AGENT] 串行执行开始: ${data.totalTasks}个子任务, 模式: ${data.executionMode}`
-      );
+      console.log(`[AGENT] 串行执行开始: ${data.totalTasks}个子任务, 模式: ${data.executionMode}`);
     });
 
     this.on("serial:task:start", (data) => {
-      console.log(
-        `[AGENT] 子任务 ${data.taskIndex}/${data.totalTasks} 开始: ${data.description}`
-      );
+      console.log(`[AGENT] 子任务 ${data.taskIndex}/${data.totalTasks} 开始: ${data.description}`);
     });
 
     this.on("serial:task:complete", (data) => {
@@ -183,14 +166,11 @@ class WKAgent extends EventEmitter {
       const data = {
         longTerm: Array.from(this.longTerm.entries()),
         memoryStats: this.memoryStats,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       };
 
       if (typeof localStorage !== "undefined") {
-        localStorage.setItem(
-          this.config.memory.persistenceKey,
-          JSON.stringify(data)
-        );
+        localStorage.setItem(this.config.memory.persistenceKey, JSON.stringify(data));
       }
     } catch (error) {
       console.warn("[AGENT] 持久化保存失败:", error.message);
@@ -239,10 +219,8 @@ class WKAgent extends EventEmitter {
       failedTasks: this.serialExecution.failedTasks,
       progress:
         this.serialExecution.totalTasks > 0
-          ? (this.serialExecution.completedTasks /
-              this.serialExecution.totalTasks) *
-            100
-          : 0,
+          ? (this.serialExecution.completedTasks / this.serialExecution.totalTasks) * 100
+          : 0
     };
   }
 
@@ -260,32 +238,17 @@ class WKAgent extends EventEmitter {
       const contextAnalysis = await this.analyzeContext(prompt, options);
 
       // 2. 构建增强的消息历史（包含上下文分析结果）
-      const messages = this.buildEnhancedMessageHistory(
-        prompt,
-        options,
-        contextAnalysis
-      );
+      const messages = this.buildEnhancedMessageHistory(prompt, options, contextAnalysis);
 
       // 3. 智能任务分析（结合上下文）
-      const taskAnalysis = await this.analyzeTaskWithContext(
-        messages,
-        contextAnalysis
-      );
+      const taskAnalysis = await this.analyzeTaskWithContext(messages, contextAnalysis);
 
       // 4. 执行策略选择
       let result;
       if (taskAnalysis.needsDecomposition) {
-        result = await this.executeWithSubAgents(
-          taskAnalysis,
-          messages,
-          contextAnalysis
-        );
+        result = await this.executeWithSubAgents(taskAnalysis, messages, contextAnalysis);
       } else {
-        result = await this.executeDirectly(
-          messages,
-          taskAnalysis,
-          contextAnalysis
-        );
+        result = await this.executeDirectly(messages, taskAnalysis, contextAnalysis);
       }
 
       // 5. 记录到记忆系统
@@ -310,12 +273,10 @@ class WKAgent extends EventEmitter {
             recommendedStrategy: taskAnalysis.recommendedStrategy,
             confidence: taskAnalysis.confidence,
             reason: taskAnalysis.reason,
-            contextRelevance: taskAnalysis.contextRelevance,
+            contextRelevance: taskAnalysis.contextRelevance
           },
-          subAgentCount: taskAnalysis.needsDecomposition
-            ? taskAnalysis.estimatedSubTasks
-            : 0,
-        },
+          subAgentCount: taskAnalysis.needsDecomposition ? taskAnalysis.estimatedSubTasks : 0
+        }
       };
     } catch (error) {
       this.emit("task:error", taskId, error);
@@ -324,8 +285,8 @@ class WKAgent extends EventEmitter {
         taskId,
         error: error.message,
         metadata: {
-          duration: Date.now() - startTime,
-        },
+          duration: Date.now() - startTime
+        }
       };
     }
   }
@@ -338,7 +299,7 @@ class WKAgent extends EventEmitter {
       return {
         summary: "上下文分析已禁用",
         keyPoints: [],
-        recommendations: [],
+        recommendations: []
       };
     }
 
@@ -358,24 +319,20 @@ class WKAgent extends EventEmitter {
 2. 之前讨论过哪些相关主题？
 3. 用户的知识水平如何？
 4. 当前请求与历史对话的关联性？
-5. 需要提供什么类型的回答？（详细/简洁/技术/概念）`,
+5. 需要提供什么类型的回答？（详细/简洁/技术/概念）`
       },
       {
         role: "user",
-        content: `历史对话摘要：${JSON.stringify(
-          this.generateQuickSummary(),
-          null,
-          2
-        )}
+        content: `历史对话摘要：${JSON.stringify(this.generateQuickSummary(), null, 2)}
 当前请求：${prompt}
 
-请提供上下文分析结果，JSON格式。`,
-      },
+请提供上下文分析结果，JSON格式。`
+      }
     ];
 
     try {
       const response = await this.callLLM(analysisMessages, {
-        temperature: 0.3,
+        temperature: 0.3
       });
       const parseResult = JSONParser.safeParse(response, { fallback: {} });
 
@@ -388,7 +345,7 @@ class WKAgent extends EventEmitter {
       this.emit("context:analyze", {
         keyPoints: analysis.keyPoints?.length || 0,
         userIntent: analysis.userIntent,
-        recommendedStyle: analysis.recommendedStyle,
+        recommendedStyle: analysis.recommendedStyle
       });
 
       return analysis;
@@ -402,31 +359,18 @@ class WKAgent extends EventEmitter {
    * 基础上下文分析（降级方案）
    */
   basicContextAnalysis(prompt, history) {
-    const keywords = [
-      "分析",
-      "解释",
-      "比较",
-      "总结",
-      "建议",
-      "如何",
-      "什么",
-      "为什么",
-    ];
+    const keywords = ["分析", "解释", "比较", "总结", "建议", "如何", "什么", "为什么"];
     const promptType = keywords.find((kw) => prompt.includes(kw)) || "general";
 
     const topics = history.map((h) => h.content).join(" ");
-    const relevantHistory = history.filter(
-      (h) => this.calculateRelevance(h.content, prompt) > 0.3
-    );
+    const relevantHistory = history.filter((h) => this.calculateRelevance(h.content, prompt) > 0.3);
 
     return {
       summary: `基础分析: 请求类型=${promptType}, 相关历史=${relevantHistory.length}条`,
-      keyPoints: relevantHistory
-        .slice(-3)
-        .map((h) => h.content.substring(0, 50)),
+      keyPoints: relevantHistory.slice(-3).map((h) => h.content.substring(0, 50)),
       recommendations: [`基于${promptType}类型提供响应`, "参考历史对话模式"],
       userIntent: promptType,
-      confidence: 0.6,
+      confidence: 0.6
     };
   }
 
@@ -439,18 +383,16 @@ class WKAgent extends EventEmitter {
     // 系统提示 - 增强版
     messages.push({
       role: "system",
-      content: this.buildEnhancedSystemPrompt(options, contextAnalysis),
+      content: this.buildEnhancedSystemPrompt(options, contextAnalysis)
     });
 
     // 长期记忆（关键信息）- 基于上下文分析筛选
     if (this.longTerm.size > 0 && contextAnalysis.keyPoints?.length > 0) {
-      const relevantLongTerm = this.selectRelevantLongTerm(
-        contextAnalysis.keyPoints
-      );
+      const relevantLongTerm = this.selectRelevantLongTerm(contextAnalysis.keyPoints);
       if (relevantLongTerm.length > 0) {
         messages.push({
           role: "system",
-          content: `关键背景信息:\n${relevantLongTerm.join("\n")}`,
+          content: `关键背景信息:\n${relevantLongTerm.join("\n")}`
         });
       }
     }
@@ -461,7 +403,7 @@ class WKAgent extends EventEmitter {
       if (relevantSummaries.length > 0) {
         messages.push({
           role: "system",
-          content: `相关历史摘要:\n${relevantSummaries.join("\n")}`,
+          content: `相关历史摘要:\n${relevantSummaries.join("\n")}`
         });
       }
     }
@@ -477,14 +419,14 @@ class WKAgent extends EventEmitter {
     if (contextAnalysis.recommendations?.length > 0) {
       messages.push({
         role: "system",
-        content: `上下文建议: ${contextAnalysis.recommendations.join(", ")}`,
+        content: `上下文建议: ${contextAnalysis.recommendations.join(", ")}`
       });
     }
 
     // 当前用户输入
     messages.push({
       role: "user",
-      content: currentPrompt,
+      content: currentPrompt
     });
 
     return messages;
@@ -498,10 +440,7 @@ class WKAgent extends EventEmitter {
     const currentPrompt = messages[messages.length - 1].content;
 
     // 预分析：快速判断是否需要复杂分析
-    const quickAnalysis = this.quickTaskPreAnalysis(
-      currentPrompt,
-      contextAnalysis
-    );
+    const quickAnalysis = this.quickTaskPreAnalysis(currentPrompt, contextAnalysis);
 
     // 如果预分析确定为简单任务，直接返回结果
     if (quickAnalysis.confidence > 0.8) {
@@ -537,7 +476,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 - 复杂系统分析：分解为3-5个子任务
 - 全面研究：分解为5+个子任务
 
-请返回结构化JSON，包含详细的分析理由。`,
+请返回结构化JSON，包含详细的分析理由。`
       },
       {
         role: "user",
@@ -557,13 +496,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
   "reason": "详细分析理由",
   "recommendedStrategy": "direct/decompose/research",
   "confidence": 0.95
-}`,
-      },
+}`
+      }
     ];
 
     try {
       const response = await this.callLLM(analysisMessages, {
-        temperature: 0.2,
+        temperature: 0.2
       });
       const parseResult = JSONParser.safeParse(response, { fallback: {} });
 
@@ -574,18 +513,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       const analysis = parseResult.data;
 
       // 增强分析结果的可信度检查
-      const enhancedAnalysis = this.enhanceTaskAnalysis(
-        analysis,
-        currentPrompt,
-        contextAnalysis
-      );
+      const enhancedAnalysis = this.enhanceTaskAnalysis(analysis, currentPrompt, contextAnalysis);
 
       console.log("[AGENT] 深度任务分析结果:", {
         complexity: enhancedAnalysis.complexity,
         needsDecomposition: enhancedAnalysis.needsDecomposition,
         estimatedSubTasks: enhancedAnalysis.estimatedSubTasks,
         reason: enhancedAnalysis.reason,
-        confidence: enhancedAnalysis.confidence,
+        confidence: enhancedAnalysis.confidence
       });
 
       return enhancedAnalysis;
@@ -605,50 +540,50 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         pattern: /^什么是\s+\S+\??$/i,
         type: "definition",
         complexity: "low",
-        confidence: 0.95,
+        confidence: 0.95
       },
       {
         pattern: /^\S+\s+是什么\??$/i,
         type: "definition",
         complexity: "low",
-        confidence: 0.95,
+        confidence: 0.95
       },
       {
         pattern: /^如何\s+\S+\??$/i,
         type: "howto",
         complexity: "low",
-        confidence: 0.9,
+        confidence: 0.9
       },
       {
         pattern: /^\S+\s+怎么做\??$/i,
         type: "howto",
         complexity: "low",
-        confidence: 0.9,
+        confidence: 0.9
       },
       {
         pattern: /^解释\s+\S+\??$/i,
         type: "explanation",
         complexity: "low",
-        confidence: 0.9,
+        confidence: 0.9
       },
       {
         pattern: /^翻译[:：]/i,
         type: "translation",
         complexity: "low",
-        confidence: 0.95,
+        confidence: 0.95
       },
       {
         pattern: /^计算[:：]/i,
         type: "calculation",
         complexity: "low",
-        confidence: 0.95,
+        confidence: 0.95
       },
       {
         pattern: /^\d+\s*[*+\-/]\s*\d+\s*=\s*\?*$/i,
         type: "calculation",
         complexity: "low",
-        confidence: 0.98,
-      },
+        confidence: 0.98
+      }
     ];
 
     const complexPatterns = [
@@ -656,44 +591,44 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         pattern: /分析.*和.*的不同/i,
         type: "comparison",
         complexity: "medium",
-        confidence: 0.8,
+        confidence: 0.8
       },
       {
         pattern: /比较.*和.*的/i,
         type: "comparison",
         complexity: "medium",
-        confidence: 0.8,
+        confidence: 0.8
       },
       {
         pattern: /全面分析/i,
         type: "comprehensive_analysis",
         complexity: "high",
-        confidence: 0.85,
+        confidence: 0.85
       },
       {
         pattern: /详细研究/i,
         type: "detailed_research",
         complexity: "high",
-        confidence: 0.85,
+        confidence: 0.85
       },
       {
         pattern: /系统性地/i,
         type: "systematic_analysis",
         complexity: "high",
-        confidence: 0.85,
+        confidence: 0.85
       },
       {
         pattern: /多个方面/i,
         type: "multi_aspect",
         complexity: "medium",
-        confidence: 0.8,
+        confidence: 0.8
       },
       {
         pattern: /从.*角度.*分析/i,
         type: "multi_perspective",
         complexity: "medium",
-        confidence: 0.8,
-      },
+        confidence: 0.8
+      }
     ];
 
     // 检查简单模式
@@ -708,7 +643,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
           recommendedStrategy: "direct",
           contextRelevance: contextAnalysis.confidence || 0.5,
           confidence: confidence,
-          reason: `快速识别为简单${type}任务，无需分解`,
+          reason: `快速识别为简单${type}任务，无需分解`
         };
       }
     }
@@ -726,7 +661,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
           recommendedStrategy: "decompose",
           contextRelevance: contextAnalysis.confidence || 0.5,
           confidence: confidence,
-          reason: `快速识别为${complexity}复杂度${type}任务，建议分解为${subTaskCount}个子任务`,
+          reason: `快速识别为${complexity}复杂度${type}任务，建议分解为${subTaskCount}个子任务`
         };
       }
     }
@@ -741,7 +676,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       recommendedStrategy: "direct",
       contextRelevance: contextAnalysis.confidence || 0.5,
       confidence: 0.3,
-      reason: "无法快速识别任务类型，需要深度分析",
+      reason: "无法快速识别任务类型，需要深度分析"
     };
   }
 
@@ -777,15 +712,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       "看",
       "好",
       "自己",
-      "这",
+      "这"
     ];
     const words = text
       .replace(/[^\u4e00-\u9fa5a-zA-Z]/g, " ")
       .split(/\s+/)
       .filter((w) => w.length > 1);
-    const keywords = words.filter(
-      (word) => !stopWords.includes(word) && word.length > 1
-    );
+    const keywords = words.filter((word) => !stopWords.includes(word) && word.length > 1);
     return [...new Set(keywords)].slice(0, 10);
   }
 
@@ -797,14 +730,11 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
     if (prompt.length > 200) indicators.push("长文本");
     if (prompt.split("。").length > 3) indicators.push("多句子");
-    if (prompt.includes("和") || prompt.includes("以及"))
-      indicators.push("并列结构");
+    if (prompt.includes("和") || prompt.includes("以及")) indicators.push("并列结构");
     if (/\d+/.test(prompt)) indicators.push("包含数字");
     if (prompt.includes("？")) indicators.push("疑问句");
-    if (prompt.includes("分析") || prompt.includes("研究"))
-      indicators.push("分析性");
-    if (prompt.includes("比较") || prompt.includes("对比"))
-      indicators.push("比较性");
+    if (prompt.includes("分析") || prompt.includes("研究")) indicators.push("分析性");
+    if (prompt.includes("比较") || prompt.includes("对比")) indicators.push("比较性");
 
     return indicators.length > 0 ? indicators.join(", ") : "基础文本";
   }
@@ -822,26 +752,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     if (taskType === "multi_step") return true;
 
     // 基于特征判断
-    if (
-      prompt.includes("多个") ||
-      prompt.includes("全面") ||
-      prompt.includes("系统")
-    )
-      return true;
-    if (prompt.split("。").filter((s) => s.trim().length > 5).length > 3)
-      return true;
+    if (prompt.includes("多个") || prompt.includes("全面") || prompt.includes("系统")) return true;
+    if (prompt.split("。").filter((s) => s.trim().length > 5).length > 3) return true;
     if (prompt.length > 300) return true;
 
     // 基于关键词判断
-    const decompositionKeywords = [
-      "分别",
-      "依次",
-      "逐步",
-      "分步骤",
-      "分阶段",
-      "多角度",
-      "多方面",
-    ];
+    const decompositionKeywords = ["分别", "依次", "逐步", "分步骤", "分阶段", "多角度", "多方面"];
     if (decompositionKeywords.some((kw) => prompt.includes(kw))) return true;
 
     return false;
@@ -861,20 +777,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     if (taskType === "comparison") count = 2;
     if (taskType === "research") count = 3;
     if (taskType === "multi_step")
-      count = Math.max(
-        2,
-        prompt.split("。").filter((s) => s.trim().length > 5).length
-      );
+      count = Math.max(2, prompt.split("。").filter((s) => s.trim().length > 5).length);
 
     // 基于关键词
     if (prompt.includes("多个")) count = Math.max(count, 3);
-    if (prompt.includes("全面") || prompt.includes("系统"))
-      count = Math.max(count, 4);
+    if (prompt.includes("全面") || prompt.includes("系统")) count = Math.max(count, 4);
 
     // 基于句子数量
-    const sentenceCount = prompt
-      .split("。")
-      .filter((s) => s.trim().length > 5).length;
+    const sentenceCount = prompt.split("。").filter((s) => s.trim().length > 5).length;
     if (sentenceCount > 3) count = Math.max(count, Math.min(5, sentenceCount));
 
     // 基于长度
@@ -898,7 +808,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       extraction: ["提取", "找出", "识别", "获取", "收集"],
       planning: ["计划", "规划", "方案", "策略"],
       research: ["调研", "调查", "探索", "发现"],
-      question: ["?", "？", "吗", "呢", "吧"],
+      question: ["?", "？", "吗", "呢", "吧"]
     };
 
     for (const [type, keywords] of Object.entries(typePatterns)) {
@@ -926,16 +836,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       "多角度",
       "多方面",
       "复杂",
-      "高级",
+      "高级"
     ];
     const simpleKeywords = ["简单", "基础", "概述", "简介", "什么是"];
 
-    const complexMatches = complexKeywords.filter((kw) =>
-      prompt.includes(kw)
-    ).length;
-    const simpleMatches = simpleKeywords.filter((kw) =>
-      prompt.includes(kw)
-    ).length;
+    const complexMatches = complexKeywords.filter((kw) => prompt.includes(kw)).length;
+    const simpleMatches = simpleKeywords.filter((kw) => prompt.includes(kw)).length;
 
     if (complexMatches > simpleMatches) return "high";
     if (simpleMatches > complexMatches) return "low";
@@ -962,8 +868,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     const risks = [];
 
     if (prompt.length > 500) risks.push("长文本处理可能导致信息丢失");
-    if (prompt.includes("敏感") || prompt.includes("隐私"))
-      risks.push("可能涉及敏感内容");
+    if (prompt.includes("敏感") || prompt.includes("隐私")) risks.push("可能涉及敏感内容");
     if (analysis.complexity === "high") risks.push("高复杂度可能导致理解偏差");
     if (prompt.split("。").length > 5) risks.push("多句子结构可能导致逻辑混乱");
 
@@ -975,18 +880,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       taskType: analysis.taskType || "general",
       complexity: analysis.complexity || "medium",
       needsDecomposition: Boolean(analysis.needsDecomposition),
-      estimatedSubTasks: Math.max(
-        1,
-        Math.min(8, parseInt(analysis.estimatedSubTasks) || 1)
-      ),
+      estimatedSubTasks: Math.max(1, Math.min(8, parseInt(analysis.estimatedSubTasks) || 1)),
       originalPrompt: prompt,
       recommendedStrategy: analysis.recommendedStrategy || "direct",
       contextRelevance: contextAnalysis.confidence || 0.5,
-      confidence: Math.max(
-        0.5,
-        Math.min(1, parseFloat(analysis.confidence) || 0.7)
-      ),
-      reason: analysis.reason || "基于LLM分析结果",
+      confidence: Math.max(0.5, Math.min(1, parseFloat(analysis.confidence) || 0.7)),
+      reason: analysis.reason || "基于LLM分析结果"
     };
 
     // 智能校验和调整
@@ -1024,7 +923,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     const complexityIndicators = {
       high: ["详细分析", "全面", "多个", "复杂", "深入研究", "系统性地"],
       medium: ["分析", "比较", "总结", "建议", "如何"],
-      low: ["什么", "简单", "基础", "介绍", "概述"],
+      low: ["什么", "简单", "基础", "介绍", "概述"]
     };
 
     let complexity = "medium";
@@ -1036,8 +935,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     }
 
     const needsDecomposition = prompt.length > 100 || complexity === "high";
-    const estimatedSubTasks =
-      complexity === "high" ? 4 : complexity === "medium" ? 2 : 1;
+    const estimatedSubTasks = complexity === "high" ? 4 : complexity === "medium" ? 2 : 1;
 
     return {
       taskType: "general",
@@ -1046,7 +944,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       estimatedSubTasks,
       originalPrompt: prompt,
       recommendedStrategy: needsDecomposition ? "decompose" : "direct",
-      contextRelevance: contextAnalysis.confidence || 0.5,
+      contextRelevance: contextAnalysis.confidence || 0.5
     };
   }
 
@@ -1067,9 +965,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
    * 估算子任务数量
    */
   estimateSubTasks(prompt) {
-    const sentenceCount = prompt
-      .split("。")
-      .filter((s) => s.trim().length > 5).length;
+    const sentenceCount = prompt.split("。").filter((s) => s.trim().length > 5).length;
     const keywordCount = ["分析", "比较", "总结", "建议", "解释"].filter((kw) =>
       prompt.includes(kw)
     ).length;
@@ -1085,9 +981,9 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       ...messages.slice(0, -1),
       {
         role: "system",
-        content: this.buildExecutionPrompt(taskAnalysis, contextAnalysis),
+        content: this.buildExecutionPrompt(taskAnalysis, contextAnalysis)
       },
-      messages[messages.length - 1], // 用户原始请求
+      messages[messages.length - 1] // 用户原始请求
     ];
 
     const response = await this.callLLM(enhancedMessages);
@@ -1095,7 +991,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       type: "direct",
       content: response,
       method: "enhanced_single_llm_call",
-      contextUsed: true,
+      contextUsed: true
     };
   }
 
@@ -1125,11 +1021,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
    */
   async executeWithSubAgents(taskAnalysis, originalMessages, contextAnalysis) {
     // 分解子任务
-    const subTasks = await this.decomposeTask(
-      taskAnalysis,
-      originalMessages,
-      contextAnalysis
-    );
+    const subTasks = await this.decomposeTask(taskAnalysis, originalMessages, contextAnalysis);
 
     // 初始化串行执行状态
     const serialExecution = {
@@ -1139,14 +1031,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       startTime: Date.now(),
       isPaused: false,
       isCancelled: false,
-      currentTaskIndex: 0,
+      currentTaskIndex: 0
     };
 
     this.emit("serial:start", {
       totalTasks: serialExecution.totalTasks,
-      executionMode: this.config.task.enableConcurrency
-        ? "concurrent"
-        : "sequential",
+      executionMode: this.config.task.enableConcurrency ? "concurrent" : "sequential"
     });
 
     // 执行子任务
@@ -1162,7 +1052,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     } else {
       // 增强的顺序执行
       const cumulativeResults = []; // 🔥 新增：累积结果存储
-      
+
       for (let i = 0; i < subTasks.length; i++) {
         const subTask = subTasks[i];
         serialExecution.currentTaskIndex = i;
@@ -1171,7 +1061,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         if (serialExecution.isCancelled) {
           this.emit("serial:cancelled", {
             completedTasks: serialExecution.completedTasks,
-            failedTasks: serialExecution.failedTasks,
+            failedTasks: serialExecution.failedTasks
           });
           break;
         }
@@ -1186,7 +1076,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
             taskIndex: i + 1,
             totalTasks: subTasks.length,
             taskId: subTask.id,
-            description: subTask.description,
+            description: subTask.description
           });
 
           // 🔥 修改：传递累积结果给子任务
@@ -1203,9 +1093,9 @@ ${JSON.stringify(contextAnalysis, null, 2)}
             this.emit("serial:task:complete", {
               taskIndex: i + 1,
               taskId: subTask.id,
-              success: true,
+              success: true
             });
-            
+
             // 🔥 新增：将成功结果添加到累积结果中
             cumulativeResults.push({
               subTaskId: subTask.id,
@@ -1213,13 +1103,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
               result: result.result,
               success: true
             });
-            
           } else {
             serialExecution.failedTasks++;
             this.emit("serial:task:failed", {
               taskIndex: i + 1,
               taskId: subTask.id,
-              error: result.error,
+              error: result.error
             });
 
             // 错误处理策略
@@ -1230,19 +1119,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
           subResults.push(result);
         } catch (error) {
-          console.log(
-            "[DEBUG] Caught error in task",
-            i + 1,
-            ":",
-            error.message
-          );
+          console.log("[DEBUG] Caught error in task", i + 1, ":", error.message);
           console.log("[DEBUG] Error stack:", error.stack);
 
           serialExecution.failedTasks++;
           this.emit("serial:task:error", {
             taskIndex: i + 1,
             taskId: subTask.id,
-            error: error.message,
+            error: error.message
           });
 
           // 根据配置决定是否继续执行
@@ -1252,7 +1136,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
               subTaskId: subTask.id,
               error: error.message,
               success: false,
-              agentId: "error_recovery",
+              agentId: "error_recovery"
             });
           } else {
             throw error; // 默认行为：停止执行
@@ -1261,9 +1145,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
         // 任务间延迟（可选）
         if (i < subTasks.length - 1 && this.config.task.sequentialDelay > 0) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, this.config.task.sequentialDelay)
-          );
+          await new Promise((resolve) => setTimeout(resolve, this.config.task.sequentialDelay));
         }
       }
     }
@@ -1274,15 +1156,11 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       totalTasks: serialExecution.totalTasks,
       completedTasks: serialExecution.completedTasks,
       failedTasks: serialExecution.failedTasks,
-      executionTime,
+      executionTime
     });
 
     // 汇总结果
-    return await this.synthesizeResults(
-      subResults,
-      taskAnalysis,
-      contextAnalysis
-    );
+    return await this.synthesizeResults(subResults, taskAnalysis, contextAnalysis);
   }
 
   /**
@@ -1305,18 +1183,18 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 4. 为每个子任务分配合理的优先级
 5. 考虑子任务间的依赖关系
 
-返回结构化的JSON数组，每个元素包含：id, description, priority, estimatedComplexity`,
+返回结构化的JSON数组，每个元素包含：id, description, priority, estimatedComplexity`
       },
       {
         role: "user",
         content: `请将以下任务智能分解为${taskAnalysis.estimatedSubTasks}个子任务：
-${taskAnalysis.originalPrompt}`,
-      },
+${taskAnalysis.originalPrompt}`
+      }
     ];
 
     try {
       const response = await this.callLLM(decompositionMessages, {
-        temperature: 0.4,
+        temperature: 0.4
       });
       const parseResult = JSONParser.safeParse(response, { fallback: [] });
 
@@ -1328,13 +1206,10 @@ ${taskAnalysis.originalPrompt}`,
 
       // 验证子任务结构
       const validSubTasks = subTasks.filter(
-        (task) =>
-          task && typeof task === "object" && task.id && task.description
+        (task) => task && typeof task === "object" && task.id && task.description
       );
 
-      return validSubTasks.length > 0
-        ? validSubTasks
-        : this.basicDecomposeTask(taskAnalysis);
+      return validSubTasks.length > 0 ? validSubTasks : this.basicDecomposeTask(taskAnalysis);
     } catch (error) {
       console.warn("[AGENT] 智能任务分解失败，使用基础分解:", error.message);
       return this.basicDecomposeTask(taskAnalysis);
@@ -1353,7 +1228,7 @@ ${taskAnalysis.originalPrompt}`,
         id: `subtask_${i}`,
         description: `${taskAnalysis.originalPrompt} - 部分${i}`,
         priority: i,
-        estimatedComplexity: taskAnalysis.complexity || "medium",
+        estimatedComplexity: taskAnalysis.complexity || "medium"
       });
     }
 
@@ -1364,21 +1239,29 @@ ${taskAnalysis.originalPrompt}`,
    * 执行单个子任务（增强版）
    * 🔥 新增：cumulativeResults 参数用于接收前置结果
    */
-  async executeSubTask(subTask, parentMessages, contextAnalysis, agentId = null, cumulativeResults = []) {
+  async executeSubTask(
+    subTask,
+    parentMessages,
+    contextAnalysis,
+    agentId = null,
+    cumulativeResults = []
+  ) {
     if (!agentId) {
-      agentId = `subagent_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      agentId = `subagent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     this.emit("subAgent:create", agentId);
 
     // 🔥 新增：构建前置结果信息
-    const previousResultsInfo = cumulativeResults.length > 0 
-      ? `前置子任务结果：\n${cumulativeResults.map((r, index) => 
-          `${index + 1}. ${r.description}:\n${r.result.substring(0, 500)}${r.result.length > 500 ? '...' : ''}`
-        ).join('\n\n')}\n\n请基于以上前置结果继续完成当前子任务。`
-      : '这是第一个子任务，请独立完成。';
+    const previousResultsInfo =
+      cumulativeResults.length > 0
+        ? `前置子任务结果：\n${cumulativeResults
+            .map(
+              (r, index) =>
+                `${index + 1}. ${r.description}:\n${r.result.substring(0, 500)}${r.result.length > 500 ? "..." : ""}`
+            )
+            .join("\n\n")}\n\n请基于以上前置结果继续完成当前子任务。`
+        : "这是第一个子任务，请独立完成。";
 
     const subMessages = [
       parentMessages[0], // 系统提示
@@ -1396,12 +1279,12 @@ ${taskAnalysis.originalPrompt}`,
 2. 提供详细且准确的结果
 3. 保持与主任务目标的一致性
 4. 基于前置结果进行衔接和整合
-5. 如有需要，可以请求额外信息`,
+5. 如有需要，可以请求额外信息`
       },
       {
         role: "user",
-        content: `${previousResultsInfo}\n\n执行子任务：${subTask.description}\n\n这是主任务的一部分，请专注完成这个具体子任务。`,
-      },
+        content: `${previousResultsInfo}\n\n执行子任务：${subTask.description}\n\n这是主任务的一部分，请专注完成这个具体子任务。`
+      }
     ];
 
     try {
@@ -1412,14 +1295,14 @@ ${taskAnalysis.originalPrompt}`,
         result: response,
         success: true,
         agentId,
-        priority: subTask.priority,
+        priority: subTask.priority
       };
     } catch (error) {
       return {
         subTaskId: subTask.id,
         error: error.message,
         success: false,
-        agentId,
+        agentId
       };
     }
   }
@@ -1433,10 +1316,10 @@ ${taskAnalysis.originalPrompt}`,
       subResults: subResults.map((r) => ({
         success: r.success,
         subTaskId: r.subTaskId,
-        hasResult: !!r.result,
+        hasResult: !!r.result
       })),
       taskAnalysis: taskAnalysis.taskType,
-      contextAnalysis: contextAnalysis.summary,
+      contextAnalysis: contextAnalysis.summary
     });
 
     const successfulResults = subResults.filter((r) => r.success);
@@ -1445,8 +1328,8 @@ ${taskAnalysis.originalPrompt}`,
       count: successfulResults.length,
       results: successfulResults.map((r) => ({
         subTaskId: r.subTaskId,
-        resultPreview: r.result?.substring(0, 100),
-      })),
+        resultPreview: r.result?.substring(0, 100)
+      }))
     });
 
     if (successfulResults.length === 0) {
@@ -1454,26 +1337,18 @@ ${taskAnalysis.originalPrompt}`,
         type: "synthesis",
         content: "所有子任务执行失败",
         error: "No successful sub-tasks",
-        contextAnalysis: contextAnalysis.summary,
+        contextAnalysis: contextAnalysis.summary
       };
     }
 
     // 智能汇总：使用LLM进行结果整合
     if (successfulResults.length > 1) {
       try {
-        return await this.intelligentSynthesis(
-          successfulResults,
-          taskAnalysis,
-          contextAnalysis
-        );
+        return await this.intelligentSynthesis(successfulResults, taskAnalysis, contextAnalysis);
       } catch (error) {
         console.warn("[AGENT] 智能汇总失败，使用基础汇总:", error.message);
         // 回退到基础文本汇总
-        return this.basicTextSynthesis(
-          successfulResults,
-          taskAnalysis,
-          contextAnalysis
-        );
+        return this.basicTextSynthesis(successfulResults, taskAnalysis, contextAnalysis);
       }
     }
 
@@ -1484,7 +1359,7 @@ ${taskAnalysis.originalPrompt}`,
       subTaskCount: 1,
       method: "single_result",
       contextAnalysis: contextAnalysis.summary,
-      success: true,
+      success: true
     };
   }
 
@@ -1506,25 +1381,18 @@ ${taskAnalysis.originalPrompt}`,
 2. 合并相关的字段，避免重复
 3. 如果数据结构不同，创建合适的容器结构
 4. 保持数据类型的正确性
-5. 返回有效的JSON格式`,
+5. 返回有效的JSON格式`
         },
         {
           role: "user",
           content: `请合并以下JSON结果：\n\n${jsonResults
-            .map(
-              (r) =>
-                `子任务${r.subTaskId}结果: ${JSON.stringify(
-                  r.extractedJSON,
-                  null,
-                  2
-                )}`
-            )
-            .join("\n\n---\n\n")}\n\n原始任务: ${taskAnalysis.originalPrompt}`,
-        },
+            .map((r) => `子任务${r.subTaskId}结果: ${JSON.stringify(r.extractedJSON, null, 2)}`)
+            .join("\n\n---\n\n")}\n\n原始任务: ${taskAnalysis.originalPrompt}`
+        }
       ];
 
       const mergedJSONResponse = await this.callLLM(mergeMessages, {
-        temperature: 0.2,
+        temperature: 0.2
       });
       const mergedJSON = JSONParser.extractJSON(mergedJSONResponse);
 
@@ -1535,7 +1403,7 @@ ${taskAnalysis.originalPrompt}`,
           subTaskCount: extractedResults.length,
           method: "json_merge",
           contextAnalysis: contextAnalysis.summary,
-          data: mergedJSON,
+          data: mergedJSON
         };
       }
     } catch (error) {
@@ -1546,14 +1414,14 @@ ${taskAnalysis.originalPrompt}`,
     const combinedData = {
       subTaskResults: jsonResults.map((r) => ({
         subTaskId: r.subTaskId,
-        data: r.extractedJSON,
+        data: r.extractedJSON
       })),
       metadata: {
         totalSubTasks: extractedResults.length,
         jsonSubTasks: jsonResults.length,
         taskType: taskAnalysis.taskType,
-        timestamp: Date.now(),
-      },
+        timestamp: Date.now()
+      }
     };
 
     return {
@@ -1562,7 +1430,7 @@ ${taskAnalysis.originalPrompt}`,
       subTaskCount: extractedResults.length,
       method: "json_combination",
       contextAnalysis: contextAnalysis.summary,
-      data: combinedData,
+      data: combinedData
     };
   }
 
@@ -1579,7 +1447,7 @@ ${taskAnalysis.originalPrompt}`,
           return {
             ...result,
             extractedJSON: jsonData,
-            resultType: "json",
+            resultType: "json"
           };
         }
       } catch (error) {
@@ -1589,7 +1457,7 @@ ${taskAnalysis.originalPrompt}`,
 
       return {
         ...result,
-        resultType: "text",
+        resultType: "text"
       };
     });
 
@@ -1606,11 +1474,7 @@ ${taskAnalysis.originalPrompt}`,
       allJSON;
 
     if (shouldPreserveJSON && hasJSON) {
-      return await this.synthesizeJSONResults(
-        extractedResults,
-        taskAnalysis,
-        contextAnalysis
-      );
+      return await this.synthesizeJSONResults(extractedResults, taskAnalysis, contextAnalysis);
     }
 
     // 否则使用文本汇总
@@ -1629,19 +1493,19 @@ ${taskAnalysis.originalPrompt}`,
 2. 保持逻辑连贯性和结构清晰
 3. 消除重复内容
 4. 补充必要的过渡和连接
-5. 基于任务类型调整汇总风格`,
+5. 基于任务类型调整汇总风格`
       },
       {
         role: "user",
         content: `请汇总以下子任务结果：\n\n${extractedResults
           .map((r) => `子任务${r.subTaskId}: ${r.result}`)
-          .join("\n\n---\n\n")}`,
-      },
+          .join("\n\n---\n\n")}`
+      }
     ];
 
     try {
       const synthesizedContent = await this.callLLM(synthesisMessages, {
-        temperature: 0.4,
+        temperature: 0.4
       });
 
       return {
@@ -1649,7 +1513,7 @@ ${taskAnalysis.originalPrompt}`,
         content: synthesizedContent,
         subTaskCount: successfulResults.length,
         method: "intelligent_synthesis",
-        contextAnalysis: contextAnalysis.summary,
+        contextAnalysis: contextAnalysis.summary
       };
     } catch (error) {
       console.warn("[AGENT] 智能汇总失败，使用基础汇总:", error.message);
@@ -1665,7 +1529,7 @@ ${taskAnalysis.originalPrompt}`,
         content: combinedContent,
         subTaskCount: successfulResults.length,
         method: "basic_combination",
-        contextAnalysis: contextAnalysis.summary,
+        contextAnalysis: contextAnalysis.summary
       };
     }
   }
@@ -1681,8 +1545,8 @@ ${taskAnalysis.originalPrompt}`,
         taskId: message.taskId,
         tokenUsage: this.estimateTokenUsage(message.content),
         importance: this.calculateMessageImportance(message),
-        ...message.metadata,
-      },
+        ...message.metadata
+      }
     };
 
     this.shortTerm.push(enhancedMessage);
@@ -1720,22 +1584,21 @@ ${taskAnalysis.originalPrompt}`,
       const messagesToCompress = this.shortTerm.slice(0, -5); // 保留最近5条
 
       // AU2算法：8段式结构化压缩
-      const compressionPrompt =
-        this.generateAU2CompressionPrompt(messagesToCompress);
+      const compressionPrompt = this.generateAU2CompressionPrompt(messagesToCompress);
 
       const compressionMessages = [
         {
           role: "system",
-          content: `你是一个专业的对话历史压缩专家。请按照8段式结构化格式压缩以下对话历史，保持技术准确性和上下文连续性。`,
+          content: `你是一个专业的对话历史压缩专家。请按照8段式结构化格式压缩以下对话历史，保持技术准确性和上下文连续性。`
         },
         {
           role: "user",
-          content: compressionPrompt,
-        },
+          content: compressionPrompt
+        }
       ];
 
       const compressedContent = await this.callLLM(compressionMessages, {
-        temperature: 0.2,
+        temperature: 0.2
       });
 
       // 验证压缩结果
@@ -1750,16 +1613,13 @@ ${taskAnalysis.originalPrompt}`,
         structuredData: this.parseStructuredCompression(compressedContent),
         timestamp: Date.now(),
         originalCount: messagesToCompress.length,
-        compressionRatio: this.calculateCompressionRatio(
-          messagesToCompress,
-          compressedContent
-        ),
+        compressionRatio: this.calculateCompressionRatio(messagesToCompress, compressedContent),
         keyPoints: this.extractKeyPoints(compressedContent),
         metadata: {
           algorithm: "AU2",
           version: "1.0",
-          validated: true,
-        },
+          validated: true
+        }
       };
 
       this.mediumTerm.push(summary);
@@ -1773,7 +1633,7 @@ ${taskAnalysis.originalPrompt}`,
       this.emit("memory:compress", {
         savedMessages: messagesToCompress.length,
         compressionRatio: summary.compressionRatio,
-        algorithm: "AU2",
+        algorithm: "AU2"
       });
     } catch (error) {
       console.warn("[AGENT] LLM压缩失败，使用基础压缩:", error.message);
@@ -1785,9 +1645,7 @@ ${taskAnalysis.originalPrompt}`,
    * AU2算法压缩提示生成器
    */
   generateAU2CompressionPrompt(messages) {
-    const conversationText = messages
-      .map((m) => `${m.role}: ${m.content}`)
-      .join("\n");
+    const conversationText = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
 
     return `请按照以下8个结构化段落压缩以下对话历史：
 
@@ -1852,30 +1710,28 @@ ${conversationText}
 
     const summary = {
       userMessages: messagesToCompress.filter((m) => m.role === "user").length,
-      assistantMessages: messagesToCompress.filter(
-        (m) => m.role === "assistant"
-      ).length,
+      assistantMessages: messagesToCompress.filter((m) => m.role === "assistant").length,
       keyPoints: messagesToCompress
         .filter((m) => m.role === "user")
         .slice(-3)
         .map((m) => m.content.substring(0, 100)),
       timestamp: Date.now(),
       originalCount: messagesToCompress.length,
-      type: "basic_compression",
+      type: "basic_compression"
     };
 
     this.mediumTerm.push({
       type: "basic_summary",
       summary,
       timestamp: Date.now(),
-      originalCount: messagesToCompress.length,
+      originalCount: messagesToCompress.length
     });
 
     this.shortTerm = this.shortTerm.slice(-5);
 
     this.emit("memory:compress", {
       savedMessages: messagesToCompress.length,
-      type: "basic",
+      type: "basic"
     });
   }
 
@@ -1883,9 +1739,7 @@ ${conversationText}
    * 增强的系统提示构建
    */
   buildEnhancedSystemPrompt(options, contextAnalysis) {
-    const basePrompt =
-      options.systemPrompt ||
-      "你是一个智能助手，能够分析任务并提供结构化回答。";
+    const basePrompt = options.systemPrompt || "你是一个智能助手，能够分析任务并提供结构化回答。";
 
     const contextInfo = [];
 
@@ -1969,7 +1823,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       if (relevance > 0.2 || message.role === "user") {
         relevant.push({
           role: message.role,
-          content: message.content,
+          content: message.content
         });
       }
     }
@@ -1977,7 +1831,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     // 确保至少有最近的几条消息
     const guaranteedRecent = recentMessages.slice(-5).map((m) => ({
       role: m.role,
-      content: m.content,
+      content: m.content
     }));
 
     return [...new Set([...relevant, ...guaranteedRecent])];
@@ -2007,8 +1861,8 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       taskId,
       timestamp: Date.now(),
       metadata: {
-        contextAnalysis: contextAnalysis.summary,
-      },
+        contextAnalysis: contextAnalysis.summary
+      }
     });
 
     // 助手消息记录
@@ -2019,8 +1873,8 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       timestamp: Date.now(),
       metadata: {
         executionType: result.type || "direct",
-        subTaskCount: result.subTaskCount || 0,
-      },
+        subTaskCount: result.subTaskCount || 0
+      }
     });
 
     // 更新长期记忆（重要信息）
@@ -2040,7 +1894,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     const keyPatterns = [
       { key: "user_preference", pattern: /偏好|喜欢|习惯/g },
       { key: "project_context", pattern: /项目|工程|代码|文件/g },
-      { key: "technical_stack", pattern: /技术|框架|语言|工具/g },
+      { key: "technical_stack", pattern: /技术|框架|语言|工具/g }
     ];
 
     for (const { key, pattern } of keyPatterns) {
@@ -2048,7 +1902,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
         this.longTerm.set(`${key}_${Date.now()}`, {
           content: result.content.substring(0, 200),
           context: contextAnalysis.summary,
-          timestamp: Date.now(),
+          timestamp: Date.now()
         });
       }
     }
@@ -2098,9 +1952,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
   extractUserIntent(history) {
     if (history.length === 0) return "unknown";
 
-    const recentUserMessages = history
-      .filter((m) => m.role === "user")
-      .slice(-3);
+    const recentUserMessages = history.filter((m) => m.role === "user").slice(-3);
     const content = recentUserMessages.map((m) => m.content).join(" ");
 
     const intentPatterns = [
@@ -2108,7 +1960,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       { intent: "generation", keywords: ["生成", "创建", "制作", "编写"] },
       { intent: "explanation", keywords: ["解释", "说明", "什么是", "为什么"] },
       { intent: "summary", keywords: ["总结", "概括", "归纳"] },
-      { intent: "recommendation", keywords: ["建议", "推荐", "应该"] },
+      { intent: "recommendation", keywords: ["建议", "推荐", "应该"] }
     ];
 
     for (const { intent, keywords } of intentPatterns) {
@@ -2125,8 +1977,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
    */
   calculateCurrentTokenUsage() {
     const totalTokens = this.shortTerm.reduce(
-      (sum, m) =>
-        sum + (m.metadata?.tokenUsage || this.estimateTokenUsage(m.content)),
+      (sum, m) => sum + (m.metadata?.tokenUsage || this.estimateTokenUsage(m.content)),
       0
     );
 
@@ -2141,7 +1992,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       totalMessages: this.memoryStats.totalMessages,
       recentTopics: this.analyzeTopicFrequency(this.shortTerm.slice(-10)),
       compressionCount: this.memoryStats.compressionsCount,
-      longTermSize: this.longTerm.size,
+      longTermSize: this.longTerm.size
     };
   }
 
@@ -2171,9 +2022,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
    */
   parseStructuredCompression(content) {
     const sections = {};
-    const sectionMatches = content.match(
-      /## \d+\.\s*([^\n]+)\n([^#]*)(?=##|$)/g
-    );
+    const sectionMatches = content.match(/## \d+\.\s*([^\n]+)\n([^#]*)(?=##|$)/g);
 
     if (sectionMatches) {
       sectionMatches.forEach((match) => {
@@ -2192,9 +2041,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
    * 提取关键点
    */
   extractKeyPoints(content) {
-    const sentences = content
-      .split(/[。！？\n]/)
-      .filter((s) => s.trim().length > 10);
+    const sentences = content.split(/[。！？\n]/).filter((s) => s.trim().length > 10);
     return sentences.slice(0, 5); // 取前5个较长句子作为关键点
   }
 
@@ -2202,10 +2049,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
    * 计算压缩率
    */
   calculateCompressionRatio(originalMessages, compressedContent) {
-    const originalSize = originalMessages.reduce(
-      (sum, m) => sum + m.content.length,
-      0
-    );
+    const originalSize = originalMessages.reduce((sum, m) => sum + m.content.length, 0);
     const compressedSize = compressedContent.length;
     return Math.round((1 - compressedSize / originalSize) * 100);
   }
@@ -2218,7 +2062,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       shortTerm: this.shortTerm.length,
       mediumTerm: this.mediumTerm.length,
       longTerm: this.longTerm.size,
-      total: this.shortTerm.length + this.mediumTerm.length,
+      total: this.shortTerm.length + this.mediumTerm.length
     };
   }
 
@@ -2229,7 +2073,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     try {
       const result = await this.llmClient.call(messages, {
         ...options,
-        temperature: options.temperature || this.config.llm.temperature,
+        temperature: options.temperature || this.config.llm.temperature
       });
 
       if (!result.success) {
@@ -2259,7 +2103,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
         taskType: "analysis",
         complexity: "medium",
         needsDecomposition: true,
-        estimatedSubTasks: 3,
+        estimatedSubTasks: 3
       });
     }
 
@@ -2267,7 +2111,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       return JSON.stringify([
         { id: "subtask_1", description: "理解任务需求", priority: 1 },
         { id: "subtask_2", description: "分析关键要素", priority: 2 },
-        { id: "subtask_3", description: "生成综合结果", priority: 3 },
+        { id: "subtask_3", description: "生成综合结果", priority: 3 }
       ]);
     }
 

@@ -144,8 +144,8 @@ class LLMClient {
                 yield content;
               }
             } catch (e) {
-              // 忽略解析错误的行
               console.log(e);
+              // 忽略解析错误的行
             }
           }
         }

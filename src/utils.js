@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * JSON解析工具集
  * 专门用于处理LLM响应中的JSON数据
@@ -172,29 +173,6 @@ class JSONParser {
   }
 
   /**
-   * 验证JSON结构是否有效
-   * @param {Object} data - 解析后的数据
-   * @returns {boolean} - 是否有效
-   */
-  static isValidJSONStructure(data) {
-    if (data === null || data === undefined) return false;
-
-    // 检查基本类型
-    if (typeof data === "object") {
-      // 检查是否是有效的对象或数组
-      if (Array.isArray(data)) {
-        return data.length > 0; // 数组应该有一些内容
-      } else {
-        // 对象应该有至少一个键
-        return Object.keys(data).length > 0;
-      }
-    }
-
-    // 原始类型（字符串、数字、布尔值）都是有效的
-    return true;
-  }
-
-  /**
    * 提取JSON候选结构
    * @param {string} text - 文本内容
    * @returns {Array} - JSON字符串候选数组
@@ -225,7 +203,7 @@ class JSONParser {
     }
 
     // 方法3: 提取中括号结构
-    const bracketRegex = /\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]/g;
+    const bracketRegex = /\[[^[\]]*(?:\[[^[\]]*\][^[\]]*)*\]/g;
     const bracketMatches = text.match(bracketRegex) || [];
     for (const match of bracketMatches) {
       candidates.push({
