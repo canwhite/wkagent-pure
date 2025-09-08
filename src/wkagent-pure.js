@@ -1161,6 +1161,8 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       subResults.push(...results);
     } else {
       // 增强的顺序执行
+      const cumulativeResults = []; // 🔥 新增：累积结果存储
+      
       for (let i = 0; i < subTasks.length; i++) {
         const subTask = subTasks[i];
         serialExecution.currentTaskIndex = i;
@@ -1187,10 +1189,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
             description: subTask.description,
           });
 
+          // 🔥 修改：传递累积结果给子任务
           const result = await this.executeSubTask(
             subTask,
             originalMessages,
-            contextAnalysis
+            contextAnalysis,
+            null, // agentId 为 null，让方法内部自动生成
+            cumulativeResults // ← 新增：传递前置结果
           );
 
           if (result.success) {
@@ -1200,6 +1205,15 @@ ${JSON.stringify(contextAnalysis, null, 2)}
               taskId: subTask.id,
               success: true,
             });
+            
+            // 🔥 新增：将成功结果添加到累积结果中
+            cumulativeResults.push({
+              subTaskId: subTask.id,
+              description: subTask.description,
+              result: result.result,
+              success: true
+            });
+            
           } else {
             serialExecution.failedTasks++;
             this.emit("serial:task:failed", {
@@ -1348,13 +1362,23 @@ ${taskAnalysis.originalPrompt}`,
 
   /**
    * 执行单个子任务（增强版）
+   * 🔥 新增：cumulativeResults 参数用于接收前置结果
    */
-  async executeSubTask(subTask, parentMessages, contextAnalysis) {
-    const agentId = `subagent_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+  async executeSubTask(subTask, parentMessages, contextAnalysis, agentId = null, cumulativeResults = []) {
+    if (!agentId) {
+      agentId = `subagent_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+    }
 
     this.emit("subAgent:create", agentId);
+
+    // 🔥 新增：构建前置结果信息
+    const previousResultsInfo = cumulativeResults.length > 0 
+      ? `前置子任务结果：\n${cumulativeResults.map((r, index) => 
+          `${index + 1}. ${r.description}:\n${r.result.substring(0, 500)}${r.result.length > 500 ? '...' : ''}`
+        ).join('\n\n')}\n\n请基于以上前置结果继续完成当前子任务。`
+      : '这是第一个子任务，请独立完成。';
 
     const subMessages = [
       parentMessages[0], // 系统提示
@@ -1371,11 +1395,12 @@ ${taskAnalysis.originalPrompt}`,
 1. 专注完成指定的具体子任务
 2. 提供详细且准确的结果
 3. 保持与主任务目标的一致性
-4. 如有需要，可以请求额外信息`,
+4. 基于前置结果进行衔接和整合
+5. 如有需要，可以请求额外信息`,
       },
       {
         role: "user",
-        content: `执行子任务：${subTask.description}\n\n这是主任务的一部分，请专注完成这个具体子任务。`,
+        content: `${previousResultsInfo}\n\n执行子任务：${subTask.description}\n\n这是主任务的一部分，请专注完成这个具体子任务。`,
       },
     ];
 

@@ -38,13 +38,16 @@ async function testSerialDebug() {
     console.log(`总任务数: ${data.totalTasks}`);
   });
 
-  const simplePrompt = "请分析人工智能在医疗和教育两个领域的应用，返回JSON格式";
+  const simplePrompt = `请分析人工智能在医疗和教育两个领域的应用，返回JSON格式:{result:{
+    info:"我要的最终结果"
+  }}`;
 
   try {
     console.log("\n开始执行简单测试任务...");
     const result = await agent.execute(simplePrompt);
 
     console.log("\n任务完成!");
+    console.log("result:", JSON.stringify(result));
     console.log("结果类型:", result.result.type);
     console.log("是否使用子代理:", result.metadata.usedSubAgents);
     console.log("子任务数量:", result.metadata.subAgentCount);
