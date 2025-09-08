@@ -11,6 +11,11 @@ async function testTaskResults() {
   console.log("=== 子任务结果分析测试 ===\n");
 
   const agent = new WKAgent({
+    llm: {
+      apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+      temperature: 0.7,
+      maxTokens: 4000,
+    },
     memory: {
       compressThreshold: 15,
       enableLLMCompression: false,

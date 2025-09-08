@@ -12,6 +12,11 @@ async function testContextManagement() {
   console.log("=== 测试增强的上下文管理功能 ===\n");
 
   const agent = new WKAgent({
+    llm: {
+      apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+      temperature: 0.7,
+      maxTokens: 4000,
+    },
     memory: {
       compressThreshold: 5, // 降低阈值以便测试压缩
       enableLLMCompression: true,

@@ -13,6 +13,11 @@ async function testSimpleDecomposition() {
   console.log("=== 简单智能任务分解测试 ===\n");
 
   const agent = new WKAgent({
+    llm: {
+      apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+      temperature: 0.7,
+      maxTokens: 4000,
+    },
     memory: {
       compressThreshold: 15,
       enableLLMCompression: false,
