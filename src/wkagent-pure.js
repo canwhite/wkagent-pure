@@ -1326,12 +1326,18 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 4. 为每个子任务分配合理的优先级
 5. 考虑子任务间的依赖关系
 
-返回结构化的JSON数组，每个元素包含：id, description, priority, estimatedComplexity`,
+返回格式要求：
+- 必须返回有效的JSON数组，不要包含任何其他文字或解释
+- 数组中的每个元素必须包含：id, description, priority, estimatedComplexity
+- 示例格式：[{"id": "subtask_1", "description": "任务描述", "priority": 1, "estimatedComplexity": "high"}]
+- 只返回JSON数组，不要添加markdown代码块或其他格式`,
       },
       {
         role: "user",
         content: `请将以下任务智能分解为${taskAnalysis.estimatedSubTasks}个子任务：
-${taskAnalysis.originalPrompt}`,
+${taskAnalysis.originalPrompt}
+
+重要：只返回JSON数组，不要任何其他文字。`,
       },
     ];
 
@@ -2355,14 +2361,14 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
   async extractJSONFromSynthesis(result, taskAnalysis) {
     try {
       const content = result.content || "";
-      
+
       // 通用化JSON提取策略
       // 1. 首先尝试直接提取内容中的JSON
       const directJSON = JSONParser.extractJSON(content);
       if (directJSON && Object.keys(directJSON).length > 0) {
         return directJSON;
       }
-      
+
       // 2. 使用LLM智能提取 - 让LLM理解任务语义而不是关键词匹配
       const extractionMessages = [
         {
@@ -2379,7 +2385,8 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
 返回要求：
 - 标准的JSON对象格式
 - 字段名简洁且表意明确
-- 包含关键的量化指标和状态信息`},
+- 包含关键的量化指标和状态信息`,
+        },
         {
           role: "user",
           content: `任务理解：${taskAnalysis.originalPrompt}
@@ -2388,18 +2395,19 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
 需要提取的内容：
 ${content}
 
-请基于任务语义，提取最合适的结构化数据，返回JSON格式：`}
+请基于任务语义，提取最合适的结构化数据，返回JSON格式：`,
+        },
       ];
 
       const extractionResponse = await this.callLLM(extractionMessages, {
         temperature: 0.1,
       });
-      
+
       const extractedJSON = JSONParser.extractJSON(extractionResponse);
       if (extractedJSON && Object.keys(extractedJSON).length > 0) {
         return extractedJSON;
       }
-      
+
       // 3. 智能回退策略 - 自动识别通用模式
       return this.intelligentPatternRecognition(content, taskAnalysis);
     } catch (error) {
@@ -2471,72 +2479,76 @@ ${content}
     try {
       // 1. 数值模式识别 - 提取合理的数值范围
       const numbers = content.match(/\d+(?:\.\d+)?/g) || [];
-      const validNumbers = numbers.map(n => parseFloat(n)).filter(n => n >= 0 && n <= 10000);
-      
+      const validNumbers = numbers
+        .map((n) => parseFloat(n))
+        .filter((n) => n >= 0 && n <= 10000);
+
       // 2. 状态模式识别
       const statusPatterns = {
         completed: /完成|结束|成功|良好|优秀/i,
         inProgress: /进行中|处理中|执行中/i,
         failed: /失败|错误|异常/i,
-        pending: /等待|待处理|暂停/i
+        pending: /等待|待处理|暂停/i,
       };
-      
-      let detectedStatus = 'unknown';
+
+      let detectedStatus = "unknown";
       for (const [status, pattern] of Object.entries(statusPatterns)) {
         if (pattern.test(content)) {
           detectedStatus = status;
           break;
         }
       }
-      
+
       // 3. 结构化内容识别
-      const hasListStructure = /[\d一二三四五六七八九十][\.、]\s+\S+/.test(content);
+      const hasListStructure = /[\d一二三四五六七八九十][\.、]\s+\S+/.test(
+        content
+      );
       const hasSections = /[#*]{1,3}\s*\S+/.test(content);
       const longContent = content.length > 200;
-      
+
       // 4. 动态构建结果对象
       const result = {
         status: detectedStatus,
         contentLength: content.length,
         hasStructure: hasListStructure || hasSections,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      
+
       // 5. 根据内容特征添加相应字段
       if (validNumbers.length > 0) {
         // 如果有多个数值，取第一个作为主要指标
         result.primaryValue = validNumbers[0];
-        
+
         // 如果数值在合理评分范围内（0-100），作为评分
         if (validNumbers[0] >= 0 && validNumbers[0] <= 100) {
           result.score = validNumbers[0];
         }
-        
+
         // 保留所有数值供后续使用
         if (validNumbers.length > 1) {
           result.values = validNumbers;
         }
       }
-      
+
       // 6. 内容摘要（如果内容较长）
       if (longContent) {
-        result.summary = content.substring(0, 150) + '...';
+        result.summary = content.substring(0, 150) + "...";
         result.keyPoints = content.substring(0, 80);
       } else {
         result.content = content;
       }
-      
+
       // 7. 任务类型元数据
-      result.taskType = taskAnalysis.taskType || 'general';
-      result.extractionMethod = 'pattern_recognition';
-      
+      result.taskType = taskAnalysis.taskType || "general";
+      result.extractionMethod = "pattern_recognition";
+
       return result;
     } catch (error) {
       console.warn("[AGENT] 智能模式识别失败，使用基础结构:", error.message);
       return {
         content: content?.substring(0, 100) || "",
-        status: 'error',
-        timestamp: Date.now()
+        status: "error",
+        timestamp: Date.now(),
       };
     }
   }
