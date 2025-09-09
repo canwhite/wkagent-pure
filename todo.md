@@ -329,4 +329,171 @@ at async testComprehensiveSerialExecution (file:///Users/zack/Desktop/wkagent-pu
 验证结果: 串行执行现在能够成功分解复杂任务，创建子代理按顺序执行，并正确汇总结果。系统具备了企业级
 的稳定性和可靠性。
 
-需要你再测试
+---todo6，start---
+
+[AGENT] 串行执行开始: 4 个子任务, 模式: sequential
+
+问题根源
+
+1. maxSubTasks: 1 配置被忽略了
+
+- 这个配置项在代码中并没有被实际使用来控制子任务数量
+- 它只是控制了最大子任务数，但不是强制子任务数
+
+2. enableSmartDecomposition: false 只影响了部分逻辑
+
+- 这个配置禁用了"智能分解"，但任务仍然可以通过深度分析被分解
+- 快速预分析(quickTaskPreAnalysis)没有发现匹配模式，所以进入了深度分析
+
+3. 深度分析 LLM 判断为复杂任务
+
+- 你的任务描述包含"评估小说正文与 summary 内容的一致性等级"
+- LLM 分析认为这需要多维度分析，判断为复杂任务，需要 4 个子任务
+
+执行流程确认
+
+是的，你的理解完全正确：
+
+```
+  Agent Loop分析 → 判断需要分解 → 创建4个子任务 → 串行执行
+                       ↓
+                  [子任务1] → 完成 → [子任务2] → 完成 → [子任务3] → 完成 → [子任务4] → 完成
+                       ↓
+                  结果汇总 → 合成最终响应
+```
+
+关键点：
+
+1. 串行执行：确实是每次只执行一个子任务（enableConcurrency: false）
+2. 累积结果：每个子任务都能访问前面所有子任务的结果
+3. 结果合成：最终通过 synthesizeResults 汇总所有子任务输出
+
+建议修复
+
+要让配置真正生效，需要修改任务分析逻辑，让它尊重用户的分解设置：
+
+1.  配置设置阶段
+
+maxSubTasks: 1, // 期望：最多 1 个子任务
+enableConcurrency: false, // 实际：禁用并发，使用串行
+enableSmartDecomposition: false, // 期望：禁用智能分解
+
+2. 任务分析流程（原始逻辑）
+
+步骤 1：快速预分析
+const quickAnalysis = this.quickTaskPreAnalysis(currentPrompt, contextAnalysis);
+// 检查是否匹配简单模式，如"什么是 XXX"、"如何 XXX"等
+
+问题：你的任务描述是"评估小说正文与 summary 内容的一致性等级"，没有匹配任何简单模式，所以 confidence
+< 0.8
+
+步骤 2：深度分析（LLM 判断）
+// 进入深度分析，让 LLM 判断任务复杂度
+
+```
+const analysisMessages = [
+  // ... 系统提示：告诉LLM判断是否需要分解
+  {
+    role: "user",
+    content: `请深度分析这个任务："评估小说正文与summary内容的一致性等级"`
+  }
+];
+```
+
+LLM 的判断过程：
+
+- 任务涉及文本理解、对比分析、多维度评估
+- 需要分析 3000 字小说内容与复杂 summary
+- 包含情节、细节、逻辑链条、伏笔等多个维度
+- 结论：复杂任务，需要分解为 4 个子任务
+
+3. 执行流程（原始逻辑）
+
+配置 vs 实际行为对比：
+
+| 配置项                          | 期望值          | 实际效果                            |
+| ------------------------------- | --------------- | ----------------------------------- |
+| maxSubTasks: 1                  | 最多 1 个子任务 | ❌ 只限制了最大数量，不是强制数量   |
+| enableConcurrency: false        | 串行执行        | ✅ 确实串行执行                     |
+| enableSmartDecomposition: false | 不分解          | ❌ 只禁用了"智能"分解，LLM 仍可分解 |
+
+4. 真实执行过程
+
+```
+  [AGENT] 任务开始
+  ↓
+  [AGENT] 深度任务分析结果: {
+    complexity: 'high',
+    needsDecomposition: true,     // ← LLM判断需要分解
+    estimatedSubTasks: 4,         // ← LLM决定4个子任务
+    reason: '该任务涉及深度文本分析...'
+  }
+  ↓
+  [AGENT] 串行执行开始: 4个子任务, 模式: sequential
+  ↓
+  [子任务1] 分析差异点 → 完成
+  [子任务2] 强化感官细节 → 完成
+  [子任务3] 完善推理逻辑 → 完成
+  [子任务4] 整合修订内容 → 完成
+  ↓
+  [AGENT] 串行执行完成: 4/4 成功
+```
+
+5. 结果汇总逻辑
+
+```
+  // 每个子任务的结果累积
+  const cumulativeResults = [];
+  for (let i = 0; i < subTasks.length; i++) {
+    const result = await this.executeSubTask(
+      subTask,
+      originalMessages,
+      contextAnalysis,
+      null,
+      cumulativeResults  // ← 传递前面所有结果
+    );
+    cumulativeResults.push(result);  // ← 累积当前结果
+  }
+
+  最终合成：
+  // 通过synthesizeResults汇总所有子任务输出
+  const finalResult = await this.synthesizeResults(
+    cumulativeResults,
+    taskAnalysis,
+    contextAnalysis
+  );
+```
+
+核心问题总结
+
+1. maxSubTasks: 1 无效
+
+- 代码中没有任何地方使用这个配置来限制子任务数量
+- 它只是配置项，但没有对应的执行逻辑
+
+2. enableSmartDecomposition: false 不完全
+
+- 这个配置只跳过了"智能分解算法"，但 LLM 深度分析仍然生效
+- 系统仍然让 LLM 判断是否需要分解
+
+3. 串行执行是正确的
+
+- enableConcurrency: false 确实让子任务串行执行
+- 每次只执行一个子任务，等待完成后再执行下一个
+- 每个子任务都能看到前面所有子任务的结果
+
+结论：你的观察完全正确 -
+虽然配置为单任务，但系统通过 LLM 深度分析仍然创建了 4 个子任务，然后串行执行它们。
+
+> /plan 那你再认真分析下，解决上述问题吧
+
+⏺ I'll analyze the issues and create a comprehensive solution for the task decomposition problem.
+
+Update Todos
+⎿ ☐ 分析 maxSubTasks 配置无效的根本原因  
+ ☐ 修复 enableSmartDecomposition 配置逻辑
+☐ 实现用户配置优先的任务分析机制
+☐ 添加任务分解数量控制逻辑
+☐ 测试修复后的配置效果
+
+---todo6 end----
