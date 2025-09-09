@@ -19,9 +19,9 @@ async function testSerialDebug() {
       enablePersistence: false,
     },
     task: {
-      maxSubTasks: 1, // 强制单任务
+      enableSmartDecomposition: true, // 关键：禁用智能分解
+      maxSubTasks: 3, // 强制单任务
       enableConcurrency: false,
-      enableSmartDecomposition: false, // 关键：禁用智能分解
       errorHandling: "continue_on_error",
       sequentialDelay: 0, // 无延迟
       enableProgressTracking: false,
@@ -109,7 +109,10 @@ async function testSerialDebug() {
   console.log("=== 重构结果 ===");
   console.log("JSON数据:", newChapter.json);
   if (newChapter.json?.chapter) {
-    console.log("重构后正文预览:", newChapter.json.chapter.substring(0, 200) + "...");
+    console.log(
+      "重构后正文预览:",
+      newChapter.json.chapter.substring(0, 200) + "..."
+    );
   }
 }
 

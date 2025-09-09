@@ -519,6 +519,19 @@ class WKAgent extends EventEmitter {
   async analyzeTaskWithContext(messages, contextAnalysis) {
     const currentPrompt = messages[messages.length - 1].content;
 
+    // 🔥 如果用户禁用了智能分解，直接进行基础分析
+    if (!this.config.task.enableSmartDecomposition) {
+      console.log("[AGENT] 智能任务分解已禁用，使用基础分析");
+      const basicAnalysis = this.basicTaskAnalysis(currentPrompt, contextAnalysis);
+      // 应用用户的子任务数量限制
+      basicAnalysis.estimatedSubTasks = Math.min(
+        basicAnalysis.estimatedSubTasks,
+        this.config.task.maxSubTasks
+      );
+      basicAnalysis.needsDecomposition = basicAnalysis.estimatedSubTasks > 1;
+      return basicAnalysis;
+    }
+
     // 预分析：快速判断是否需要复杂分析
     const quickAnalysis = this.quickTaskPreAnalysis(
       currentPrompt,
@@ -528,6 +541,12 @@ class WKAgent extends EventEmitter {
     // 如果预分析确定为简单任务，直接返回结果
     if (quickAnalysis.confidence > 0.8) {
       console.log("[AGENT] 使用快速任务分析结果:", quickAnalysis.reason);
+      // 应用用户的子任务数量限制
+      quickAnalysis.estimatedSubTasks = Math.min(
+        quickAnalysis.estimatedSubTasks,
+        this.config.task.maxSubTasks
+      );
+      quickAnalysis.needsDecomposition = quickAnalysis.estimatedSubTasks > 1;
       return quickAnalysis;
     }
 
@@ -601,6 +620,25 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         currentPrompt,
         contextAnalysis
       );
+
+      // 🔥 应用用户的子任务数量限制
+      const originalSubTasks = enhancedAnalysis.estimatedSubTasks;
+      enhancedAnalysis.estimatedSubTasks = Math.min(
+        enhancedAnalysis.estimatedSubTasks,
+        this.config.task.maxSubTasks
+      );
+      
+      // 智能调整分解需求
+      if (enhancedAnalysis.estimatedSubTasks <= 1) {
+        // 如果用户强制限制为1个子任务，但原分析显示需要分解，
+        // 我们仍然标记为需要分解，但限制子任务数量为1
+        if (originalSubTasks > 1) {
+          enhancedAnalysis.reason += " (用户配置限制：最多1个子任务，但仍需结构化处理)";
+        } else {
+          enhancedAnalysis.needsDecomposition = false;
+          enhancedAnalysis.reason += " (用户配置限制：强制单任务处理)";
+        }
+      }
 
       console.log("[AGENT] 深度任务分析结果:", {
         complexity: enhancedAnalysis.complexity,
@@ -1040,6 +1078,22 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       enhanced.needsDecomposition = true;
     }
 
+    // 🔥 最终应用用户的子任务数量限制
+    const originalSubTasks = enhanced.estimatedSubTasks;
+    enhanced.estimatedSubTasks = Math.min(
+      enhanced.estimatedSubTasks,
+      this.config.task.maxSubTasks
+    );
+    
+    // 如果限制后的子任务数量发生变化，更新相关状态
+    if (enhanced.estimatedSubTasks !== originalSubTasks) {
+      console.log(`[AGENT] 应用用户配置限制：子任务数量从 ${originalSubTasks} 调整为 ${enhanced.estimatedSubTasks}`);
+      enhanced.needsDecomposition = enhanced.estimatedSubTasks > 1;
+      if (enhanced.estimatedSubTasks <= 1) {
+        enhanced.reason += " (用户配置限制：强制单任务处理)";
+      }
+    }
+
     return enhanced;
   }
   basicTaskAnalysis(prompt, contextAnalysis) {
@@ -1058,16 +1112,22 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     }
 
     const needsDecomposition = prompt.length > 100 || complexity === "high";
-    const estimatedSubTasks =
+    let estimatedSubTasks =
       complexity === "high" ? 4 : complexity === "medium" ? 2 : 1;
+    
+    // 🔥 应用用户的子任务数量限制
+    estimatedSubTasks = Math.min(estimatedSubTasks, this.config.task.maxSubTasks);
+    
+    // 如果限制后的子任务数量为1，则不需要分解
+    const finalNeedsDecomposition = estimatedSubTasks > 1 && needsDecomposition;
 
     return {
       taskType: "general",
       complexity,
-      needsDecomposition,
+      needsDecomposition: finalNeedsDecomposition,
       estimatedSubTasks,
       originalPrompt: prompt,
-      recommendedStrategy: needsDecomposition ? "decompose" : "direct",
+      recommendedStrategy: finalNeedsDecomposition ? "decompose" : "direct",
       contextRelevance: contextAnalysis.confidence || 0.5,
     };
   }
@@ -1137,6 +1197,15 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
     if (contextAnalysis.keyPoints?.length > 0) {
       prompts.push(`关注要点: ${contextAnalysis.keyPoints.join(", ")}`);
+    }
+
+    // 🔥 新增：如果任务明确要求JSON，添加生成指导
+    const hasJSONRequest = 
+      taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
+      taskAnalysis.originalPrompt?.toLowerCase().includes("返回json");
+    
+    if (hasJSONRequest) {
+      prompts.push(`输出格式: 请直接返回干净的JSON对象，不要使用代码块包装，确保JSON格式标准且易于解析`);
     }
 
     return prompts.length > 0 ? `执行指导: ${prompts.join("; ")}` : "";
@@ -2294,17 +2363,65 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     console.log("[AGENT] 强制执行JSON格式转换");
 
     try {
-      // 如果结果已经是JSON格式，直接返回
-      if (result.content && typeof result.content === "string") {
-        const extractedJSON = JSONParser.extractJSON(result.content);
-        if (extractedJSON) {
-          console.log("[AGENT] 发现已有JSON格式，直接提取");
-          return {
-            ...result,
-            content: JSON.stringify(extractedJSON, null, 2),
-            extractedJSON: extractedJSON,
-            format: "json_enforced",
-          };
+      // 🔥 关键改进：优先提取最干净的JSON，类似task1的效果
+      const contentToExtract = result.content || result.result || "";
+      
+      if (contentToExtract && typeof contentToExtract === "string") {
+        // 智能判断JSON需求的强烈程度
+        const hasExplicitJSONRequest = 
+          taskAnalysis.originalPrompt?.toLowerCase().includes("返回json") ||
+          taskAnalysis.originalPrompt?.toLowerCase().includes("json格式") ||
+          taskAnalysis.originalPrompt?.toLowerCase().includes("{");
+        
+        const hasJSONMarkers = 
+          contentToExtract.includes('```json') || 
+          contentToExtract.includes('```JSON') ||
+          contentToExtract.includes('{');
+
+        // 如果明确要求JSON或检测到JSON标记，优先直接提取
+        if (hasExplicitJSONRequest || hasJSONMarkers) {
+          console.log("[AGENT] 检测到明确JSON需求，优先直接提取");
+          let extractedJSON = JSONParser.extractJSON(contentToExtract);
+          
+          // 🔥 修复：如果直接提取失败，尝试更智能的提取策略
+          if (!extractedJSON && contentToExtract.includes('```json')) {
+            console.log("[AGENT] 直接提取失败，尝试代码块专项提取");
+            
+            // 专项提取代码块中的JSON
+            const codeBlockMatch = contentToExtract.match(/```json\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) {
+              const codeBlockContent = codeBlockMatch[1].trim();
+              console.log("[AGENT] 提取代码块内容，长度:", codeBlockContent.length);
+              
+              // 尝试解析代码块内容
+              try {
+                extractedJSON = JSON.parse(codeBlockContent);
+                console.log("[AGENT] 代码块JSON.parse成功");
+              } catch (parseError) {
+                console.log("[AGENT] 代码块JSON.parse失败，尝试jsonrepair:", parseError.message);
+                // 如果解析失败，尝试修复
+                try {
+                  const { default: jsonrepair } = await import('jsonrepair');
+                  const repairedJSON = jsonrepair(codeBlockContent);
+                  extractedJSON = JSON.parse(repairedJSON);
+                  console.log("[AGENT] jsonrepair修复成功");
+                } catch (repairError) {
+                  console.log("[AGENT] jsonrepair修复失败:", repairError.message);
+                }
+              }
+            }
+          }
+          
+          if (extractedJSON && Object.keys(extractedJSON).length > 0) {
+            console.log("[AGENT] 成功提取干净JSON结构，类似task1效果");
+            // 🔥 关键：直接返回简洁结构，类似task1
+            return {
+              ...result,
+              content: JSON.stringify(extractedJSON, null, 2),
+              extractedJSON: extractedJSON,
+              format: "clean_json_extracted", // 简洁的格式标识
+            };
+          }
         }
       }
 
@@ -2324,7 +2441,8 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
         }
       }
 
-      // 强制创建JSON响应
+      // 强制创建JSON响应（回退方案）
+      console.log("[AGENT] 使用回退方案创建JSON结构");
       const forcedJSON = await this.createForcedJSONResponse(
         result,
         taskAnalysis,
@@ -2334,7 +2452,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
         ...result,
         content: JSON.stringify(forcedJSON, null, 2),
         extractedJSON: forcedJSON,
-        format: "json_forced",
+        format: "json_forced_fallback",
       };
     } catch (error) {
       console.warn("[AGENT] JSON强制转换失败，使用基础JSON:", error.message);
@@ -2464,9 +2582,13 @@ ${content}
       return this.intelligentPatternRecognition(content, taskAnalysis);
     } catch (error) {
       console.warn("[AGENT] 强制JSON创建失败，使用基础结构:", error.message);
+      // 🔥 修复：根据任务需求决定保留内容长度
+      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json");
+      const maxLength = needsJSON ? 1000 : 200;
       return {
         success: true,
-        content: content?.substring(0, 200) || "JSON强制转换完成",
+        content: content?.substring(0, maxLength) || "JSON强制转换完成",
+        error: error.message,
         timestamp: Date.now(),
       };
     }
@@ -2530,10 +2652,23 @@ ${content}
         }
       }
 
-      // 6. 内容摘要（如果内容较长）
+      // 6. 内容处理策略（根据是否需要JSON决定）
+      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
+                       taskAnalysis.originalPrompt?.toLowerCase().includes("详细") ||
+                       taskAnalysis.originalPrompt?.toLowerCase().includes("完整");
+      
+      const hasJSONBlock = content.includes('```json') || content.includes('```JSON');
+      
       if (longContent) {
-        result.summary = content.substring(0, 150) + "...";
-        result.keyPoints = content.substring(0, 80);
+        if (needsJSON || hasJSONBlock) {
+          // 🔥 如果需要JSON或包含JSON代码块，保留完整内容
+          result.content = content;
+          result.summary = hasJSONBlock ? "检测到JSON代码块，保留完整内容" : "需要详细内容，已保留完整文本";
+        } else {
+          // 普通内容可以摘要
+          result.summary = content.substring(0, 150) + "...";
+          result.keyPoints = content.substring(0, 80);
+        }
       } else {
         result.content = content;
       }
@@ -2545,9 +2680,13 @@ ${content}
       return result;
     } catch (error) {
       console.warn("[AGENT] 智能模式识别失败，使用基础结构:", error.message);
+      // 🔥 修复：即使出错也保留更多内容，特别是当需要JSON时
+      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json");
+      const maxLength = needsJSON ? 500 : 100;
       return {
-        content: content?.substring(0, 100) || "",
+        content: content?.substring(0, maxLength) || "",
         status: "error",
+        error: error.message,
         timestamp: Date.now(),
       };
     }
