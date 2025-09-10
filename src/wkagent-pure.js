@@ -522,7 +522,10 @@ class WKAgent extends EventEmitter {
     // 🔥 如果用户禁用了智能分解，直接进行基础分析
     if (!this.config.task.enableSmartDecomposition) {
       console.log("[AGENT] 智能任务分解已禁用，使用基础分析");
-      const basicAnalysis = this.basicTaskAnalysis(currentPrompt, contextAnalysis);
+      const basicAnalysis = this.basicTaskAnalysis(
+        currentPrompt,
+        contextAnalysis
+      );
       // 应用用户的子任务数量限制
       basicAnalysis.estimatedSubTasks = Math.min(
         basicAnalysis.estimatedSubTasks,
@@ -627,13 +630,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         enhancedAnalysis.estimatedSubTasks,
         this.config.task.maxSubTasks
       );
-      
+
       // 智能调整分解需求
       if (enhancedAnalysis.estimatedSubTasks <= 1) {
         // 如果用户强制限制为1个子任务，但原分析显示需要分解，
         // 我们仍然标记为需要分解，但限制子任务数量为1
         if (originalSubTasks > 1) {
-          enhancedAnalysis.reason += " (用户配置限制：最多1个子任务，但仍需结构化处理)";
+          enhancedAnalysis.reason +=
+            " (用户配置限制：最多1个子任务，但仍需结构化处理)";
         } else {
           enhancedAnalysis.needsDecomposition = false;
           enhancedAnalysis.reason += " (用户配置限制：强制单任务处理)";
@@ -1084,10 +1088,12 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       enhanced.estimatedSubTasks,
       this.config.task.maxSubTasks
     );
-    
+
     // 如果限制后的子任务数量发生变化，更新相关状态
     if (enhanced.estimatedSubTasks !== originalSubTasks) {
-      console.log(`[AGENT] 应用用户配置限制：子任务数量从 ${originalSubTasks} 调整为 ${enhanced.estimatedSubTasks}`);
+      console.log(
+        `[AGENT] 应用用户配置限制：子任务数量从 ${originalSubTasks} 调整为 ${enhanced.estimatedSubTasks}`
+      );
       enhanced.needsDecomposition = enhanced.estimatedSubTasks > 1;
       if (enhanced.estimatedSubTasks <= 1) {
         enhanced.reason += " (用户配置限制：强制单任务处理)";
@@ -1114,10 +1120,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     const needsDecomposition = prompt.length > 100 || complexity === "high";
     let estimatedSubTasks =
       complexity === "high" ? 4 : complexity === "medium" ? 2 : 1;
-    
+
     // 🔥 应用用户的子任务数量限制
-    estimatedSubTasks = Math.min(estimatedSubTasks, this.config.task.maxSubTasks);
-    
+    estimatedSubTasks = Math.min(
+      estimatedSubTasks,
+      this.config.task.maxSubTasks
+    );
+
     // 如果限制后的子任务数量为1，则不需要分解
     const finalNeedsDecomposition = estimatedSubTasks > 1 && needsDecomposition;
 
@@ -1200,12 +1209,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     }
 
     // 🔥 新增：如果任务明确要求JSON，添加生成指导
-    const hasJSONRequest = 
+    const hasJSONRequest =
       taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
       taskAnalysis.originalPrompt?.toLowerCase().includes("返回json");
-    
+
     if (hasJSONRequest) {
-      prompts.push(`输出格式: 请直接返回干净的JSON对象，不要使用代码块包装，确保JSON格式标准且易于解析`);
+      prompts.push(
+        `输出格式: 请直接返回干净的JSON对象，不要使用代码块包装，确保JSON格式标准且易于解析`
+      );
     }
 
     return prompts.length > 0 ? `执行指导: ${prompts.join("; ")}` : "";
@@ -2365,53 +2376,64 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     try {
       // 🔥 关键改进：优先提取最干净的JSON，类似task1的效果
       const contentToExtract = result.content || result.result || "";
-      
+
       if (contentToExtract && typeof contentToExtract === "string") {
         // 智能判断JSON需求的强烈程度
-        const hasExplicitJSONRequest = 
+        const hasExplicitJSONRequest =
           taskAnalysis.originalPrompt?.toLowerCase().includes("返回json") ||
           taskAnalysis.originalPrompt?.toLowerCase().includes("json格式") ||
           taskAnalysis.originalPrompt?.toLowerCase().includes("{");
-        
-        const hasJSONMarkers = 
-          contentToExtract.includes('```json') || 
-          contentToExtract.includes('```JSON') ||
-          contentToExtract.includes('{');
+
+        const hasJSONMarkers =
+          contentToExtract.includes("```json") ||
+          contentToExtract.includes("```JSON") ||
+          contentToExtract.includes("{");
 
         // 如果明确要求JSON或检测到JSON标记，优先直接提取
         if (hasExplicitJSONRequest || hasJSONMarkers) {
           console.log("[AGENT] 检测到明确JSON需求，优先直接提取");
           let extractedJSON = JSONParser.extractJSON(contentToExtract);
-          
+
           // 🔥 修复：如果直接提取失败，尝试更智能的提取策略
-          if (!extractedJSON && contentToExtract.includes('```json')) {
+          if (!extractedJSON && contentToExtract.includes("```json")) {
             console.log("[AGENT] 直接提取失败，尝试代码块专项提取");
-            
+
             // 专项提取代码块中的JSON
-            const codeBlockMatch = contentToExtract.match(/```json\s*([\s\S]*?)\s*```/);
+            const codeBlockMatch = contentToExtract.match(
+              /```json\s*([\s\S]*?)\s*```/
+            );
             if (codeBlockMatch) {
               const codeBlockContent = codeBlockMatch[1].trim();
-              console.log("[AGENT] 提取代码块内容，长度:", codeBlockContent.length);
-              
+              console.log(
+                "[AGENT] 提取代码块内容，长度:",
+                codeBlockContent.length
+              );
+
               // 尝试解析代码块内容
               try {
                 extractedJSON = JSON.parse(codeBlockContent);
                 console.log("[AGENT] 代码块JSON.parse成功");
               } catch (parseError) {
-                console.log("[AGENT] 代码块JSON.parse失败，尝试jsonrepair:", parseError.message);
+                console.log(
+                  "[AGENT] 代码块JSON.parse失败，尝试jsonrepair:",
+                  parseError.message
+                );
                 // 如果解析失败，尝试修复
                 try {
-                  const { default: jsonrepair } = await import('jsonrepair');
+                  const { default: jsonrepair } = await import("jsonrepair");
                   const repairedJSON = jsonrepair(codeBlockContent);
                   extractedJSON = JSON.parse(repairedJSON);
                   console.log("[AGENT] jsonrepair修复成功");
                 } catch (repairError) {
-                  console.log("[AGENT] jsonrepair修复失败:", repairError.message);
+                  console.log(
+                    "[AGENT] jsonrepair修复失败:",
+                    repairError.message
+                  );
                 }
               }
             }
           }
-          
+
           if (extractedJSON && Object.keys(extractedJSON).length > 0) {
             console.log("[AGENT] 成功提取干净JSON结构，类似task1效果");
             // 🔥 关键：直接返回简洁结构，类似task1
@@ -2583,7 +2605,9 @@ ${content}
     } catch (error) {
       console.warn("[AGENT] 强制JSON创建失败，使用基础结构:", error.message);
       // 🔥 修复：根据任务需求决定保留内容长度
-      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json");
+      const needsJSON = taskAnalysis.originalPrompt
+        ?.toLowerCase()
+        .includes("json");
       const maxLength = needsJSON ? 1000 : 200;
       return {
         success: true,
@@ -2622,7 +2646,7 @@ ${content}
       }
 
       // 3. 结构化内容识别
-      const hasListStructure = /[\d一二三四五六七八九十][\.、]\s+\S+/.test(
+      const hasListStructure = /[\d一二三四五六七八九十][.、]\s+\S+/.test(
         content
       );
       const hasSections = /[#*]{1,3}\s*\S+/.test(content);
@@ -2653,17 +2677,21 @@ ${content}
       }
 
       // 6. 内容处理策略（根据是否需要JSON决定）
-      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
-                       taskAnalysis.originalPrompt?.toLowerCase().includes("详细") ||
-                       taskAnalysis.originalPrompt?.toLowerCase().includes("完整");
-      
-      const hasJSONBlock = content.includes('```json') || content.includes('```JSON');
-      
+      const needsJSON =
+        taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
+        taskAnalysis.originalPrompt?.toLowerCase().includes("详细") ||
+        taskAnalysis.originalPrompt?.toLowerCase().includes("完整");
+
+      const hasJSONBlock =
+        content.includes("```json") || content.includes("```JSON");
+
       if (longContent) {
         if (needsJSON || hasJSONBlock) {
           // 🔥 如果需要JSON或包含JSON代码块，保留完整内容
           result.content = content;
-          result.summary = hasJSONBlock ? "检测到JSON代码块，保留完整内容" : "需要详细内容，已保留完整文本";
+          result.summary = hasJSONBlock
+            ? "检测到JSON代码块，保留完整内容"
+            : "需要详细内容，已保留完整文本";
         } else {
           // 普通内容可以摘要
           result.summary = content.substring(0, 150) + "...";
@@ -2681,7 +2709,9 @@ ${content}
     } catch (error) {
       console.warn("[AGENT] 智能模式识别失败，使用基础结构:", error.message);
       // 🔥 修复：即使出错也保留更多内容，特别是当需要JSON时
-      const needsJSON = taskAnalysis.originalPrompt?.toLowerCase().includes("json");
+      const needsJSON = taskAnalysis.originalPrompt
+        ?.toLowerCase()
+        .includes("json");
       const maxLength = needsJSON ? 500 : 100;
       return {
         content: content?.substring(0, maxLength) || "",
