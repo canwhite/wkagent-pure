@@ -93,7 +93,7 @@ async function testConcurrentExecution() {
 
   console.log("📊 测试1: 并发执行模式");
   console.log("配置: maxSubTasks=5, enableConcurrency=true");
-  
+
   // 监听并发执行事件
   let concurrentEvents = [];
   concurrentAgent.on("subagent:create", (data) => {
@@ -103,10 +103,10 @@ async function testConcurrentExecution() {
       subTaskId: data.subTaskId || data.id,
     });
   });
-  
+
   concurrentAgent.on("subagent:complete", (data) => {
     concurrentEvents.push({
-      type: "complete", 
+      type: "complete",
       timestamp: Date.now(),
       subTaskId: data.subTaskId || data.id,
       success: data.success,
@@ -118,34 +118,37 @@ async function testConcurrentExecution() {
   const concurrentDuration = Date.now() - concurrentStartTime;
 
   console.log("并发执行结果:");
+  console.log("- total result", concurrentResult);
   console.log("- 执行成功:", concurrentResult.success);
   console.log("- 总耗时:", concurrentDuration, "ms");
   console.log("- 使用子代理:", concurrentResult.metadata?.usedSubAgents);
   console.log("- 子任务数量:", concurrentResult.metadata?.subAgentCount);
   console.log("- 提取到JSON:", !!concurrentResult.json);
-  
+
   if (concurrentResult.json) {
     console.log("- 分析维度数量:", Object.keys(concurrentResult.json).length);
     console.log("- 各维度评分:");
     for (const [dimension, data] of Object.entries(concurrentResult.json)) {
-      console.log(`  ${dimension}: ${data.score || 'N/A'}/10`);
+      console.log(`  ${dimension}: ${data.score || "N/A"}/10`);
     }
   }
 
   // 分析并发事件
   if (concurrentEvents.length > 0) {
     console.log("\n并发执行事件分析:");
-    const createEvents = concurrentEvents.filter(e => e.type === "create");
-    const completeEvents = concurrentEvents.filter(e => e.type === "complete");
+    const createEvents = concurrentEvents.filter((e) => e.type === "create");
+    const completeEvents = concurrentEvents.filter(
+      (e) => e.type === "complete"
+    );
     console.log("- 子代理创建数:", createEvents.length);
     console.log("- 子代理完成数:", completeEvents.length);
-    
+
     if (createEvents.length > 1) {
-      const firstCreate = Math.min(...createEvents.map(e => e.timestamp));
-      const lastCreate = Math.max(...createEvents.map(e => e.timestamp));
+      const firstCreate = Math.min(...createEvents.map((e) => e.timestamp));
+      const lastCreate = Math.max(...createEvents.map((e) => e.timestamp));
       const createSpread = lastCreate - firstCreate;
       console.log("- 子代理创建时间跨度:", createSpread, "ms");
-      
+
       if (createSpread < 100) {
         console.log("- ✅ 检测到并发创建：子代理几乎同时创建");
       } else {
@@ -157,17 +160,24 @@ async function testConcurrentExecution() {
   console.log("\n" + "=".repeat(50) + "\n");
 
   console.log("📊 测试2: 串行执行模式");
-  console.log("配置: maxSubTasks=5, enableConcurrency=false, sequentialDelay=500ms");
-  
+  console.log(
+    "配置: maxSubTasks=5, enableConcurrency=false, sequentialDelay=500ms"
+  );
+
   // 监听串行执行事件
   let serialEvents = [];
   let serialStartTime = null;
-  
+
   serialAgent.on("serial:start", (data) => {
     serialStartTime = Date.now();
-    console.log("串行执行开始:", data.executionMode, "总任务数:", data.totalTasks);
+    console.log(
+      "串行执行开始:",
+      data.executionMode,
+      "总任务数:",
+      data.totalTasks
+    );
   });
-  
+
   serialAgent.on("serial:task:start", (data) => {
     serialEvents.push({
       type: "task_start",
@@ -176,7 +186,7 @@ async function testConcurrentExecution() {
       taskId: data.taskId,
     });
   });
-  
+
   serialAgent.on("serial:task:complete", (data) => {
     serialEvents.push({
       type: "task_complete",
@@ -197,27 +207,30 @@ async function testConcurrentExecution() {
   console.log("- 使用子代理:", serialResult.metadata?.usedSubAgents);
   console.log("- 子任务数量:", serialResult.metadata?.subAgentCount);
   console.log("- 提取到JSON:", !!serialResult.json);
-  
+
   if (serialResult.json) {
     console.log("- 分析维度数量:", Object.keys(serialResult.json).length);
     console.log("- 各维度评分:");
     for (const [dimension, data] of Object.entries(serialResult.json)) {
-      console.log(`  ${dimension}: ${data.score || 'N/A'}/10`);
+      console.log(`  ${dimension}: ${data.score || "N/A"}/10`);
     }
   }
 
   // 分析串行执行事件
   if (serialEvents.length > 0) {
     console.log("\n串行执行事件分析:");
-    const startEvents = serialEvents.filter(e => e.type === "task_start");
-    const completeEvents = serialEvents.filter(e => e.type === "task_complete");
+    const startEvents = serialEvents.filter((e) => e.type === "task_start");
+    const completeEvents = serialEvents.filter(
+      (e) => e.type === "task_complete"
+    );
     console.log("- 子任务开始事件:", startEvents.length);
     console.log("- 子任务完成事件:", completeEvents.length);
-    
+
     if (startEvents.length > 1) {
       for (let i = 1; i < startEvents.length; i++) {
-        const interval = startEvents[i].timestamp - startEvents[i-1].timestamp;
-        console.log(`- 任务${i}与任务${i+1}开始间隔: ${interval}ms`);
+        const interval =
+          startEvents[i].timestamp - startEvents[i - 1].timestamp;
+        console.log(`- 任务${i}与任务${i + 1}开始间隔: ${interval}ms`);
       }
     }
   }
@@ -226,27 +239,44 @@ async function testConcurrentExecution() {
   console.log("📈 性能对比分析");
   console.log(`并发执行耗时: ${concurrentDuration}ms`);
   console.log(`串行执行耗时: ${serialDuration}ms`);
-  console.log(`性能提升: ${((serialDuration - concurrentDuration) / serialDuration * 100).toFixed(1)}%`);
-  
+  console.log(
+    `性能提升: ${(
+      ((serialDuration - concurrentDuration) / serialDuration) *
+      100
+    ).toFixed(1)}%`
+  );
+
   if (concurrentResult.json && serialResult.json) {
     const concurrentKeys = Object.keys(concurrentResult.json);
     const serialKeys = Object.keys(serialResult.json);
     console.log(`并发分析维度: ${concurrentKeys.length}`);
     console.log(`串行分析维度: ${serialKeys.length}`);
-    
+
     // 对比评分一致性
     let scoreDifferences = [];
     for (const key of concurrentKeys) {
       if (serialResult.json[key]) {
-        const diff = Math.abs((concurrentResult.json[key].score || 0) - (serialResult.json[key].score || 0));
+        const diff = Math.abs(
+          (concurrentResult.json[key].score || 0) -
+            (serialResult.json[key].score || 0)
+        );
         scoreDifferences.push(diff);
       }
     }
-    
+
     if (scoreDifferences.length > 0) {
-      const avgDifference = scoreDifferences.reduce((a, b) => a + b, 0) / scoreDifferences.length;
+      const avgDifference =
+        scoreDifferences.reduce((a, b) => a + b, 0) / scoreDifferences.length;
       console.log(`评分平均差异: ${avgDifference.toFixed(2)}分`);
-      console.log(`评分一致性: ${avgDifference < 1 ? '✅ 高度一致' : avgDifference < 2 ? 'ℹ️ 基本一致' : '⚠️ 存在差异'}`);
+      console.log(
+        `评分一致性: ${
+          avgDifference < 1
+            ? "✅ 高度一致"
+            : avgDifference < 2
+            ? "ℹ️ 基本一致"
+            : "⚠️ 存在差异"
+        }`
+      );
     }
   }
 
@@ -256,7 +286,7 @@ async function testConcurrentExecution() {
   } else {
     console.log("ℹ️  并发执行性能优势不明显，可能受API限制或任务特性影响");
   }
-  
+
   console.log("\n💡 关键发现:");
   console.log("- 并发模式适合独立性强、可并行处理的任务");
   console.log("- 串行模式适合有依赖关系、需要顺序执行的任务");
