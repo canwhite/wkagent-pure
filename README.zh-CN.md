@@ -1,3 +1,10 @@
+## 🌐 语言选项
+
+- **[中文文档](./README.zh-CN.md)** - 中文文档 (当前)
+- **[English](./README.md)** - 英文文档
+
+---
+
 # WKAgent Pure - 纯 LLM 能力的智能 Agent 系统
 
 一个基于纯 LLM 能力的智能 Agent 系统，具备三层记忆管理、子代理机制和智能任务分析能力。专为前端项目设计，支持 Next.js 集成。
@@ -350,8 +357,3 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **WKAgent Pure** - 让纯 LLM 能力发挥最大价值 🚀
-
-## 🌐 语言选项
-
-- **[中文文档](./README.zh-CN.md)** - 中文文档 (当前)
-- **[English](./README.md)** - 英文文档
