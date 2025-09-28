@@ -24,6 +24,7 @@ class WKAgent extends EventEmitter {
       forceJSON: config.forceJSON !== undefined ? config.forceJSON : false,
       //最大sub tasks
       maxSubTasks: config.maxSubTasks !== undefined ? config.maxSubTasks : 3,
+      jsonSuffix: null,
 
       //这个可以保留输入
       llm: {
@@ -132,7 +133,7 @@ class WKAgent extends EventEmitter {
     // 串行执行事件处理
     this.on("serial:start", (data) => {
       console.log(
-        `[AGENT] 串行执行开始: ${data.totalTasks}个子任务, 模式: ${data.executionMode}`
+        `[AGENT] 执行开始: ${data.totalTasks}个子任务, 模式: ${data.executionMode}`
       );
     });
 
@@ -152,7 +153,9 @@ class WKAgent extends EventEmitter {
 
     this.on("serial:complete", (data) => {
       console.log(
-        `[AGENT] 串行执行完成: ${data.completedTasks}/${data.totalTasks} 成功, 耗时: ${data.executionTime}ms`
+        `[AGENT] 执行完成: ${
+          this.config.isConcurrency ? data.totalTasks : data.completedTasks
+        }/${data.totalTasks} 成功, 耗时: ${data.executionTime}ms`
       );
     });
   }
@@ -304,11 +307,14 @@ class WKAgent extends EventEmitter {
           contextAnalysis
         );
 
+        console.log("need decomposition", taskAnalysis.needsDecomposition);
+
         if (taskAnalysis.needsDecomposition) {
           result = await this.executeWithSubAgents(
             taskAnalysis,
             messages,
-            contextAnalysis
+            contextAnalysis,
+            prompt
           );
         } else {
           result = await this.executeDirectly(
@@ -1254,13 +1260,27 @@ ${JSON.stringify(contextAnalysis, null, 2)}
   /**
    * 子代理执行（复杂任务）
    */
-  async executeWithSubAgents(taskAnalysis, originalMessages, contextAnalysis) {
-    // 分解子任务
+  async executeWithSubAgents(
+    taskAnalysis,
+    originalMessages,
+    contextAnalysis,
+    prompt
+  ) {
     const subTasks = await this.decomposeTask(
       taskAnalysis,
       originalMessages,
       contextAnalysis
     );
+    //agent
+    // 🔥 提取JSON要求，用于结果综合时的提醒
+    let jsonRequirement = null;
+    if (this.config.forceJSON) {
+      const jsonRequirement = this.extractOuterBracesContent(prompt);
+      if (!jsonRequirement) {
+        throw new Error("forceJSON模式启用但prompt中没有找到有效的JSON结构");
+      }
+      this.config.jsonSuffix = jsonRequirement;
+    }
 
     // 初始化串行执行状态
     const serialExecution = {
@@ -1282,16 +1302,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     const subResults = [];
 
     if (this.config.isConcurrency && subTasks.length > 1) {
-      // TODO1: 并发执行
       const promises = subTasks.map((subTask) =>
         this.executeSubTask(subTask, originalMessages, contextAnalysis)
       );
       const results = await Promise.all(promises);
       subResults.push(...results);
     } else {
-      // TODO2: 增强串行
       const cumulativeResults = []; // 🔥 新增：累积结果存储
-
       for (let i = 0; i < subTasks.length; i++) {
         const subTask = subTasks[i];
         serialExecution.currentTaskIndex = i;
@@ -1608,6 +1625,7 @@ ${taskAnalysis.originalPrompt}
     // 智能汇总：使用LLM进行结果整合
     if (successfulResults.length > 1) {
       try {
+        //TODO3，在合并结果这一块儿
         return await this.intelligentSynthesis(
           successfulResults,
           taskAnalysis,
@@ -1643,6 +1661,11 @@ ${taskAnalysis.originalPrompt}
 
     try {
       // 尝试智能合并JSON结果
+      let jsonFormatRequirement = "";
+      if (this.config.jsonSuffix) {
+        jsonFormatRequirement = `\n6. 最终输出必须严格遵循以下JSON格式要求：\n${this.config.jsonSuffix}`;
+      }
+
       const mergeMessages = [
         {
           role: "system",
@@ -1653,7 +1676,7 @@ ${taskAnalysis.originalPrompt}
 2. 合并相关的字段，避免重复
 3. 如果数据结构不同，创建合适的容器结构
 4. 保持数据类型的正确性
-5. 返回有效的JSON格式`,
+5. 返回有效的JSON格式${jsonFormatRequirement}`,
         },
         {
           role: "user",
@@ -1676,6 +1699,7 @@ ${taskAnalysis.originalPrompt}
       const mergedJSON = JSONParser.extractJSON(mergedJSONResponse);
 
       if (mergedJSON) {
+        this.config.jsonSuffix = null;
         return {
           type: "synthesis",
           content: JSON.stringify(mergedJSON, null, 2),
@@ -1761,6 +1785,11 @@ ${taskAnalysis.originalPrompt}
     }
 
     // 否则使用文本汇总
+    let additionalRequirements = "";
+    if (this.config.jsonSuffix) {
+      additionalRequirements = `\n6. 最终输出必须严格遵循以下JSON格式要求：\n${this.config.jsonSuffix}`;
+    }
+
     const synthesisMessages = [
       {
         role: "system",
@@ -1776,7 +1805,7 @@ ${taskAnalysis.originalPrompt}
 2. 保持逻辑连贯性和结构清晰
 3. 消除重复内容
 4. 补充必要的过渡和连接
-5. 基于任务类型调整汇总风格`,
+5. 基于任务类型调整汇总风格${additionalRequirements}`,
       },
       {
         role: "user",
@@ -1791,6 +1820,7 @@ ${taskAnalysis.originalPrompt}
         temperature: 0.4,
       });
 
+      this.config.jsonSuffix = null;
       return {
         type: "synthesis",
         content: synthesizedContent,
@@ -2774,6 +2804,34 @@ ${content}
     }
 
     return "我理解您的请求，但由于API限制，我提供了这个回退响应。";
+  }
+
+  /**
+   * 提取最外层两个括号之间的内容
+   */
+  extractOuterBracesContent(str) {
+    const startIndex = str.indexOf("{");
+    if (startIndex === -1) return null;
+
+    let braceCount = 0;
+    let endIndex = -1;
+
+    for (let i = startIndex; i < str.length; i++) {
+      const char = str[i];
+      if (char === "{") {
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0) {
+          endIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (endIndex === -1) return null;
+
+    return str.substring(startIndex, endIndex + 1);
   }
 
   parseJSON(str) {

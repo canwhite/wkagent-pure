@@ -9,10 +9,10 @@ import WKAgent from "./src/index.js";
 dotenv.config();
 
 async function testSerialDebug() {
-  console.log("=== 串行执行配置调试 ===\n");
+  console.log("=== 并行和串行执行配置调试 ===\n");
 
   let agent = new WKAgent({
-    isConcurrency: false,
+    isConcurrency: true,
     isHistoryAnalysis: false,
     forceJSON: true,
     maxSubTasks: 3, //测试增强串行的时候，需要给这里加agents数量
