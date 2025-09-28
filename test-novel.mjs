@@ -11,8 +11,17 @@ dotenv.config();
 async function testSerialDebug() {
   console.log("=== 并行和串行执行配置调试 ===\n");
 
+  //串行单子agent
+  let agent = new WKAgent({
+    isConcurrency: false,
+    isHistoryAnalysis: false,
+    forceJSON: true,
+    maxSubTasks: 1,
+    isDebug: true,
+  });
+
   //并行多子agent
-  /*
+  /*=================================================
   let agent = new WKAgent({
     isConcurrency: true,
     isHistoryAnalysis: false,
@@ -20,10 +29,9 @@ async function testSerialDebug() {
     maxSubTasks: 3,
     isDebug: false,
   });
-  */
-
-  /*
-  //串行多agent
+  ===================================================*/
+  //串行多子agent
+  /*==================================================
   let agent = new WKAgent({
     isConcurrency: false,
     isHistoryAnalysis: false,
@@ -38,16 +46,7 @@ async function testSerialDebug() {
       maxTokens: 4000,
     },
   });
-  */
-
-  //串行单agent
-  let agent = new WKAgent({
-    isConcurrency: false,
-    isHistoryAnalysis: false,
-    forceJSON: true,
-    maxSubTasks: 1,
-    isDebug: true,
-  });
+  ====================================================*/
 
   // 监听事件以确认执行模式
   agent.on("serial:start", (data) => {
@@ -85,6 +84,9 @@ async function testSerialDebug() {
   
   `;
 
+  /** TASK1，分析
+   * 返回结果所写即所得{"consistencyLevel": 8, "analysis": "具体分析说明"}
+   */
   const result = await agent.execute(`
     任务：评估小说正文与summary内容的一致性等级
     
@@ -101,6 +103,7 @@ async function testSerialDebug() {
   //在json里
   console.log("=== 完整结果 ===", result.json);
 
+  /** TASK2:基于分析结果生成 */
   const newChapter = await agent.execute(`
     任务：基于summary要求重构小说正文内容
     
