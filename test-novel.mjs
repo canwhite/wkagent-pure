@@ -12,27 +12,10 @@ async function testSerialDebug() {
   console.log("=== 串行执行配置调试 ===\n");
 
   let agent = new WKAgent({
-    memory: {
-      maxShortTerm: 10, // 大幅减少短期记忆
-      compressThreshold: 5, // 降低压缩阈值
-      enableLLMCompression: false, // 禁用LLM压缩避免复杂处理
-      enablePersistence: false,
-    },
-    task: {
-      enableSmartDecomposition: true, // 关键：禁用智能分解
-      maxSubTasks: 3, // 强制单任务
-      enableConcurrency: false,
-      errorHandling: "continue_on_error",
-      sequentialDelay: 0, // 无延迟
-      enableProgressTracking: false,
-      enableExecutionControl: false,
-      forceJSON: true, // 启用强制JSON模式
-    },
-    context: {
-      enableHistoryAnalysis: false, // 禁用历史分析
-      enableContextInjection: false, // 禁用上下文注入
-      maxContextMessages: 5, // 限制上下文消息数
-    },
+    isConcurrency: false,
+    isHistoryAnalysis: false,
+    forceJSON: true,
+    maxSubTasks: 3, //测试增强串行的时候，需要给这里加agents数量
   });
 
   // 监听事件以确认执行模式
@@ -87,6 +70,7 @@ async function testSerialDebug() {
   //在json里
   console.log("=== 完整结果 ===", result.json);
 
+  /** 
   const newChapter = await agent.execute(`
     任务：基于summary要求重构小说正文内容
     
@@ -114,6 +98,7 @@ async function testSerialDebug() {
       newChapter.json.chapter.substring(0, 200) + "..."
     );
   }
+    */
 }
 
 // 运行调试测试

@@ -13,6 +13,19 @@ class WKAgent extends EventEmitter {
   constructor(config = {}) {
     super();
     this.config = {
+      //是否并发
+      isConcurrency:
+        config.isConcurrency !== undefined ? config.isConcurrency : false,
+      isHistoryAnalysis:
+        config.isHistoryAnalysis != undefined
+          ? config.isHistoryAnalysis
+          : false,
+      //是否强制json解析
+      forceJSON: config.forceJSON !== undefined ? config.forceJSON : false,
+      //最大sub tasks
+      maxSubTasks: config.maxSubTasks !== undefined ? config.maxSubTasks : 3,
+
+      //这个可以保留输入
       llm: {
         apiKey: config.llm?.apiKey || process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
         baseURL:
@@ -32,6 +45,8 @@ class WKAgent extends EventEmitter {
           parseFloat(process.env.NEXT_PUBLIC_LLM_TEMPERATURE) ||
           0.7,
       },
+
+      //这里的内容不要自定义
       memory: {
         maxShortTerm:
           config.memory?.maxShortTerm ||
@@ -49,20 +64,13 @@ class WKAgent extends EventEmitter {
           config.memory?.persistenceKey || "wkagent-longterm-memory",
       },
       task: {
-        maxSubTasks:
-          config.task?.maxSubTasks ||
-          parseInt(process.env.NEXT_PUBLIC_AGENT_MAX_SUB_TASKS) ||
-          5,
-        enableConcurrency: config.task?.enableConcurrency !== false,
         enableSmartDecomposition: true, // 启用智能任务分解
         errorHandling: config.task?.errorHandling || "stop_on_error", // 错误处理策略: stop_on_error, continue_on_error
         sequentialDelay: config.task?.sequentialDelay || 0, // 串行执行时任务间延迟(毫秒)
         enableProgressTracking: true, // 启用进度跟踪
         enableExecutionControl: true, // 启用执行控制(暂停/恢复/取消)
-        forceJSON: config.task?.forceJSON || false, // 强制返回JSON格式
       },
       context: {
-        enableHistoryAnalysis: config.context?.enableHistoryAnalysis !== false, // 默认启用
         enableContextInjection:
           config.context?.enableContextInjection !== false, // 默认启用
         maxContextMessages: config.context?.maxContextMessages || 50, // 最大上下文消息数
@@ -257,7 +265,7 @@ class WKAgent extends EventEmitter {
     try {
       this.emit("task:start", taskId);
 
-      // 1. 上下文分析和历史参与决策
+      // 1. 上下文分析和历史参与决策,
       const contextAnalysis = await this.analyzeContext(prompt, options);
 
       // 2. 构建增强的消息历史（包含上下文分析结果）
@@ -267,26 +275,48 @@ class WKAgent extends EventEmitter {
         contextAnalysis
       );
 
-      // 3. 智能任务分析（结合上下文）
-      const taskAnalysis = await this.analyzeTaskWithContext(
-        messages,
-        contextAnalysis
-      );
-
       // 4. 执行策略选择
       let result;
-      if (taskAnalysis.needsDecomposition) {
-        result = await this.executeWithSubAgents(
-          taskAnalysis,
-          messages,
-          contextAnalysis
-        );
-      } else {
+      //默认taskAnalysis
+      let taskAnalysis = {
+        originalPrompt: prompt,
+        complexity: "low",
+        recommendedStrategy: "direct",
+        confidence: 0.9,
+        reason: "单子任务直接执行模式",
+        contextRelevance: "medium",
+        needsDecomposition: false,
+        estimatedSubTasks: 1,
+        taskType: "direct",
+      };
+      //串行，单sub agent
+      if (!this.config.isConcurrency && this.config.maxSubTasks <= 1) {
         result = await this.executeDirectly(
           messages,
           taskAnalysis,
           contextAnalysis
         );
+      } else {
+        //并行和串行都有可能，但是max sub agents的数量大于1
+        //当然我们还需要判断一下是否需要拆sub agents
+        taskAnalysis = await this.analyzeTaskWithContext(
+          messages,
+          contextAnalysis
+        );
+
+        if (taskAnalysis.needsDecomposition) {
+          result = await this.executeWithSubAgents(
+            taskAnalysis,
+            messages,
+            contextAnalysis
+          );
+        } else {
+          result = await this.executeDirectly(
+            messages,
+            taskAnalysis,
+            contextAnalysis
+          );
+        }
       }
 
       // 5. 记录到记忆系统
@@ -298,7 +328,7 @@ class WKAgent extends EventEmitter {
       let finalResult = result;
       let extractedJSONData = null;
 
-      if (this.config.task.forceJSON) {
+      if (this.config.forceJSON) {
         finalResult = await this.enforceJSONFormat(
           result,
           taskAnalysis,
@@ -335,7 +365,7 @@ class WKAgent extends EventEmitter {
           subAgentCount: taskAnalysis.needsDecomposition
             ? taskAnalysis.estimatedSubTasks
             : 0,
-          forceJSON: this.config.task.forceJSON, // 🔥 添加forceJSON状态
+          forceJSON: this.config.forceJSON, // 🔥 添加forceJSON状态
           hasJSON: !!extractedJSONData, // 🔥 新增：标记是否成功提取JSON
         },
       };
@@ -356,7 +386,7 @@ class WKAgent extends EventEmitter {
    * 上下文分析 - 让历史消息参与决策
    */
   async analyzeContext(prompt, options = {}) {
-    if (!this.config.context.enableHistoryAnalysis) {
+    if (!this.config.isHistoryAnalysis) {
       return {
         summary: "上下文分析已禁用",
         keyPoints: [],
@@ -378,9 +408,8 @@ class WKAgent extends EventEmitter {
 分析维度：
 1. 用户的核心关注点是什么？
 2. 之前讨论过哪些相关主题？
-3. 用户的知识水平如何？
-4. 当前请求与历史对话的关联性？
-5. 需要提供什么类型的回答？（详细/简洁/技术/概念）`,
+3. 当前请求与历史对话的关联性？
+4. 需要提供什么类型的回答？（详细/简洁/技术/概念）`,
       },
       {
         role: "user",
@@ -529,7 +558,7 @@ class WKAgent extends EventEmitter {
       // 应用用户的子任务数量限制
       basicAnalysis.estimatedSubTasks = Math.min(
         basicAnalysis.estimatedSubTasks,
-        this.config.task.maxSubTasks
+        this.config.maxSubTasks
       );
       basicAnalysis.needsDecomposition = basicAnalysis.estimatedSubTasks > 1;
       return basicAnalysis;
@@ -547,7 +576,7 @@ class WKAgent extends EventEmitter {
       // 应用用户的子任务数量限制
       quickAnalysis.estimatedSubTasks = Math.min(
         quickAnalysis.estimatedSubTasks,
-        this.config.task.maxSubTasks
+        this.config.maxSubTasks
       );
       quickAnalysis.needsDecomposition = quickAnalysis.estimatedSubTasks > 1;
       return quickAnalysis;
@@ -628,7 +657,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       const originalSubTasks = enhancedAnalysis.estimatedSubTasks;
       enhancedAnalysis.estimatedSubTasks = Math.min(
         enhancedAnalysis.estimatedSubTasks,
-        this.config.task.maxSubTasks
+        this.config.maxSubTasks
       );
 
       // 智能调整分解需求
@@ -1086,7 +1115,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     const originalSubTasks = enhanced.estimatedSubTasks;
     enhanced.estimatedSubTasks = Math.min(
       enhanced.estimatedSubTasks,
-      this.config.task.maxSubTasks
+      this.config.maxSubTasks
     );
 
     // 如果限制后的子任务数量发生变化，更新相关状态
@@ -1122,10 +1151,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       complexity === "high" ? 4 : complexity === "medium" ? 2 : 1;
 
     // 🔥 应用用户的子任务数量限制
-    estimatedSubTasks = Math.min(
-      estimatedSubTasks,
-      this.config.task.maxSubTasks
-    );
+    estimatedSubTasks = Math.min(estimatedSubTasks, this.config.maxSubTasks);
 
     // 如果限制后的子任务数量为1，则不需要分解
     const finalNeedsDecomposition = estimatedSubTasks > 1 && needsDecomposition;
@@ -1196,19 +1222,22 @@ ${JSON.stringify(contextAnalysis, null, 2)}
   buildExecutionPrompt(taskAnalysis, contextAnalysis) {
     const prompts = [];
 
-    if (contextAnalysis.recommendedStyle) {
+    //这里也需要做些判断操作
+
+    if (contextAnalysis?.recommendedStyle) {
       prompts.push(`回答风格: ${contextAnalysis.recommendedStyle}`);
     }
 
-    if (taskAnalysis.complexity) {
+    if (taskAnalysis?.complexity) {
       prompts.push(`任务复杂度: ${taskAnalysis.complexity}`);
     }
 
-    if (contextAnalysis.keyPoints?.length > 0) {
+    if (contextAnalysis?.keyPoints?.length > 0) {
       prompts.push(`关注要点: ${contextAnalysis.keyPoints.join(", ")}`);
     }
 
     // 🔥 新增：如果任务明确要求JSON，添加生成指导
+
     const hasJSONRequest =
       taskAnalysis.originalPrompt?.toLowerCase().includes("json") ||
       taskAnalysis.originalPrompt?.toLowerCase().includes("返回json");
@@ -1246,23 +1275,21 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
     this.emit("serial:start", {
       totalTasks: serialExecution.totalTasks,
-      executionMode: this.config.task.enableConcurrency
-        ? "concurrent"
-        : "sequential",
+      executionMode: this.config.isConcurrency ? "concurrent" : "sequential",
     });
 
     // 执行子任务
     const subResults = [];
 
-    if (this.config.task.enableConcurrency && subTasks.length > 1) {
-      // 并发执行
+    if (this.config.isConcurrency && subTasks.length > 1) {
+      // TODO1: 并发执行
       const promises = subTasks.map((subTask) =>
         this.executeSubTask(subTask, originalMessages, contextAnalysis)
       );
       const results = await Promise.all(promises);
       subResults.push(...results);
     } else {
-      // 增强的顺序执行
+      // TODO2: 增强串行
       const cumulativeResults = []; // 🔥 新增：累积结果存储
 
       for (let i = 0; i < subTasks.length; i++) {
