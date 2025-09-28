@@ -104,6 +104,14 @@ const agent = new WKAgent(config);
 
 ```javascript
 {
+  // New configuration options
+  isConcurrency: boolean,            // Enable concurrent sub-agent execution
+  isHistoryAnalysis: boolean,         // Enable historical conversation analysis
+  forceJSON: boolean,                // Force JSON output format
+  isDebug: boolean,                  // Enable debug mode for detailed logging
+  maxSubTasks: number                // Maximum number of sub-tasks for complex tasks
+
+  // Optional configuration options
   llm: {
     apiKey: string,           // API key
     baseURL: string,          // API base URL
@@ -133,12 +141,6 @@ const agent = new WKAgent(config);
     enableContextInjection: boolean,  // Enable context injection
     maxContextMessages: number        // Maximum context messages
   },
-  // New configuration options
-  isConcurrency: boolean,            // Enable concurrent sub-agent execution
-  isHistoryAnalysis: boolean,         // Enable historical conversation analysis
-  forceJSON: boolean,                // Force JSON output format
-  isDebug: boolean,                  // Enable debug mode for detailed logging
-  maxSubTasks: number                // Maximum number of sub-tasks for complex tasks
 }
 ```
 
@@ -270,21 +272,9 @@ When memory usage reaches the threshold, AU2 algorithm compression is automatica
 
 ## 🧪 Test Examples
 
-The project includes multiple test files showcasing different features:
+Usage examples:
 
 ```bash
-# Basic functionality test
-node test-json-simple.mjs
-
-# Context management test
-node test-context.mjs
-
-# Serial execution test
-node test-serial-execution.mjs
-
-# Comprehensive test
-node test-serial-comprehensive.mjs
-
 # Novel analysis and generation test
 node test-novel.mjs
 ```

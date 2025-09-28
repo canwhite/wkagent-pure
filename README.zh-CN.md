@@ -102,6 +102,14 @@ const agent = new WKAgent(config);
 
 ```javascript
 {
+  // 新增配置选项
+  isConcurrency: boolean,            // 启用并发子代理执行
+  isHistoryAnalysis: boolean,         // 启用历史对话分析
+  forceJSON: boolean,                // 强制JSON输出格式
+  isDebug: boolean,                  // 启用调试模式，输出详细日志
+  maxSubTasks: number                // 最大子任务数量
+
+  // 可选配置选项
   llm: {
     apiKey: string,           // API密钥
     baseURL: string,          // API基础URL
@@ -131,12 +139,6 @@ const agent = new WKAgent(config);
     enableContextInjection: boolean,  // 启用上下文注入
     maxContextMessages: number        // 最大上下文消息数
   },
-  // 新增配置选项
-  isConcurrency: boolean,            // 启用并发子代理执行
-  isHistoryAnalysis: boolean,         // 启用历史对话分析
-  forceJSON: boolean,                // 强制JSON输出格式
-  isDebug: boolean,                  // 启用调试模式，输出详细日志
-  maxSubTasks: number                // 最大子任务数量
 }
 ```
 
@@ -266,21 +268,9 @@ await agent.execute("推荐一些学习资源"); // 会考虑用户对React的�
 
 ## 🧪 测试示例
 
-项目包含多个测试文件，展示不同功能：
+使用示例：
 
 ```bash
-# 基础功能测试
-node test-json-simple.mjs
-
-# 上下文管理测试
-node test-context.mjs
-
-# 串行执行测试
-node test-serial-execution.mjs
-
-# 综合测试
-node test-serial-comprehensive.mjs
-
 # 小说分析和生成测试
 node test-novel.mjs
 ```
