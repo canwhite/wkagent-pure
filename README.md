@@ -81,6 +81,13 @@ const complexResult = await agent.execute(
   "Comprehensively analyze the differences and similarities between React and Vue"
 );
 console.log(complexResult);
+
+// Execute with JSON output
+const jsonResult = await agent.execute(`
+  Analyze user preferences and return in JSON format
+  Return format: {"preferences": {"category": "string", "score": number}}
+`);
+console.log(jsonResult.json); // Access parsed JSON data
 ```
 
 ## 📋 API Reference
@@ -125,7 +132,13 @@ const agent = new WKAgent(config);
     enableHistoryAnalysis: boolean,   // Enable history analysis
     enableContextInjection: boolean,  // Enable context injection
     maxContextMessages: number        // Maximum context messages
-  }
+  },
+  // New configuration options
+  isConcurrency: boolean,            // Enable concurrent sub-agent execution
+  isHistoryAnalysis: boolean,         // Enable historical conversation analysis
+  forceJSON: boolean,                // Force JSON output format
+  isDebug: boolean,                  // Enable debug mode for detailed logging
+  maxSubTasks: number                // Maximum number of sub-tasks for complex tasks
 }
 ```
 
@@ -156,6 +169,7 @@ const result = await agent.execute("Analyze this task", {
     method: string,          // Execution method
     data: object             // Structured data (optional)
   },
+  json: object,              // Parsed JSON data (when forceJSON is enabled)
   metadata: {
     duration: number,        // Execution time (ms)
     usedSubAgents: boolean,  // Whether sub-agents were used
@@ -206,6 +220,12 @@ agent.on("memory:compress", (data) => {
 
 agent.on("serial:task:start", (data) => {
   console.log(`Sub-task ${data.taskIndex}/${data.totalTasks} started`);
+});
+
+// Serial execution mode events
+agent.on("serial:start", (data) => {
+  console.log(`Execution mode: ${data.executionMode}`);
+  console.log(`Total tasks: ${data.totalTasks}`);
 });
 ```
 
@@ -264,6 +284,9 @@ node test-serial-execution.mjs
 
 # Comprehensive test
 node test-serial-comprehensive.mjs
+
+# Novel analysis and generation test
+node test-novel.mjs
 ```
 
 ## 📊 Performance Optimization Recommendations
@@ -349,6 +372,12 @@ A: Adjust compression thresholds and enable LLM compression algorithms
 
 **Q: What to do if JSON parsing fails?**
 A: Use the `JSONParser.safeParse()` method, which tries multiple repair strategies
+
+**Q: How to enable debug mode?**
+A: Set `isDebug: true` in the configuration to enable detailed logging throughout the execution process
+
+**Q: What's the difference between concurrent and serial execution?**
+A: Concurrent execution runs sub-agents in parallel for better performance, while serial execution processes them sequentially for better control and debugging
 
 ## 📄 License
 

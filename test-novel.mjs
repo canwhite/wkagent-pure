@@ -11,12 +11,43 @@ dotenv.config();
 async function testSerialDebug() {
   console.log("=== 并行和串行执行配置调试 ===\n");
 
+  //并行多子agent
   let agent = new WKAgent({
     isConcurrency: true,
     isHistoryAnalysis: false,
     forceJSON: true,
-    maxSubTasks: 3, //测试增强串行的时候，需要给这里加agents数量
+    maxSubTasks: 3,
+    isDebug: false,
   });
+
+  /*
+  //串行多agent
+  let agent = new WKAgent({
+    isConcurrency: false,
+    isHistoryAnalysis: false,
+    forceJSON: true,
+    maxSubTasks: 3,
+    isDebug: true,
+    llm: {
+      //baseURL:xxx,
+      //model:xxx,
+      apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+      temperature: 0.7,
+      maxTokens: 4000,
+    },
+  });
+  */
+
+  /*
+  //串行单agent
+  let agent = new WKAgent({
+    isConcurrency: false,
+    isHistoryAnalysis: false,
+    forceJSON: true,
+    maxSubTasks: 1,
+    isDebug: true,
+  });
+  */
 
   // 监听事件以确认执行模式
   agent.on("serial:start", (data) => {
@@ -70,7 +101,6 @@ async function testSerialDebug() {
   //在json里
   console.log("=== 完整结果 ===", result.json);
 
-  /** 
   const newChapter = await agent.execute(`
     任务：基于summary要求重构小说正文内容
     
@@ -98,7 +128,6 @@ async function testSerialDebug() {
       newChapter.json.chapter.substring(0, 200) + "..."
     );
   }
-    */
 }
 
 // 运行调试测试

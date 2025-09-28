@@ -79,6 +79,13 @@ console.log(result);
 // 执行复杂任务（自动分解）
 const complexResult = await agent.execute("全面分析React和Vue的异同点");
 console.log(complexResult);
+
+// 执行JSON输出任务
+const jsonResult = await agent.execute(`
+  分析用户偏好并以JSON格式返回
+  返回格式：{"preferences": {"category": "string", "score": number}}
+`);
+console.log(jsonResult.json); // 访问解析后的JSON数据
 ```
 
 ## 📋 API 参考
@@ -123,7 +130,13 @@ const agent = new WKAgent(config);
     enableHistoryAnalysis: boolean,   // 启用历史分析
     enableContextInjection: boolean,  // 启用上下文注入
     maxContextMessages: number        // 最大上下文消息数
-  }
+  },
+  // 新增配置选项
+  isConcurrency: boolean,            // 启用并发子代理执行
+  isHistoryAnalysis: boolean,         // 启用历史对话分析
+  forceJSON: boolean,                // 强制JSON输出格式
+  isDebug: boolean,                  // 启用调试模式，输出详细日志
+  maxSubTasks: number                // 最大子任务数量
 }
 ```
 
@@ -154,6 +167,7 @@ const result = await agent.execute("分析这个任务", {
     method: string,          // 执行方法
     data: object             // 结构化数据(可选)
   },
+  json: object,              // 解析后的JSON数据（当forceJSON启用时）
   metadata: {
     duration: number,        // 执行时间(ms)
     usedSubAgents: boolean,  // 是否使用子代理
@@ -204,6 +218,12 @@ agent.on("memory:compress", (data) => {
 
 agent.on("serial:task:start", (data) => {
   console.log(`子任务 ${data.taskIndex}/${data.totalTasks} 开始`);
+});
+
+// 串行执行模式事件
+agent.on("serial:start", (data) => {
+  console.log(`执行模式: ${data.executionMode}`);
+  console.log(`总任务数: ${data.totalTasks}`);
 });
 ```
 
@@ -260,6 +280,9 @@ node test-serial-execution.mjs
 
 # 综合测试
 node test-serial-comprehensive.mjs
+
+# 小说分析和生成测试
+node test-novel.mjs
 ```
 
 ## 📊 性能优化建议
@@ -345,6 +368,12 @@ A: 调整压缩阈值和启用 LLM 压缩算法
 
 **Q: JSON 解析失败怎么办？**
 A: 使用 `JSONParser.safeParse()` 方法，它会尝试多种修复策略
+
+**Q: 如何启用调试模式？**
+A: 在配置中设置 `isDebug: true` 来启用详细日志输出，便于调试和监控执行过程
+
+**Q: 并发执行和串行执行有什么区别？**
+A: 并发执行并行运行子代理以获得更好的性能，串行执行顺序处理子代理以获得更好的控制和调试能力
 
 ## 📄 许可证
 

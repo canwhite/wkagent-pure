@@ -24,7 +24,10 @@ class WKAgent extends EventEmitter {
       forceJSON: config.forceJSON !== undefined ? config.forceJSON : false,
       //最大sub tasks
       maxSubTasks: config.maxSubTasks !== undefined ? config.maxSubTasks : 3,
+      //forceJSON格式下JSON要求
       jsonSuffix: null,
+      //debug
+      isDebug: config.isDebug != undefined ? config.isDebug : false,
 
       //这个可以保留输入
       llm: {
@@ -107,52 +110,61 @@ class WKAgent extends EventEmitter {
     this.setupEventHandlers();
   }
 
+  /**
+   * Debug日志输出
+   */
+  debugLog(...args) {
+    if (this.config.isDebug) {
+      console.log(...args);
+    }
+  }
+
   setupEventHandlers() {
     this.on("task:start", (taskId) => {
-      console.log(`[AGENT] 任务开始: ${taskId}`);
+      this.debugLog(`[AGENT] 任务开始: ${taskId}`);
     });
 
     this.on("task:complete", (taskId, result) => {
-      console.log(`[AGENT] 任务完成: ${taskId},result:${result}`);
+      this.debugLog(`[AGENT] 任务完成: ${taskId},result:${result}`);
     });
 
     this.on("memory:compress", (data) => {
-      console.log(
+      this.debugLog(
         `[AGENT] 记忆压缩: 节省${data.savedMessages}条消息, 压缩率${data.compressionRatio}%`
       );
     });
 
     this.on("subAgent:create", (agentId) => {
-      console.log(`[AGENT] 创建子代理: ${agentId}`);
+      this.debugLog(`[AGENT] 创建子代理: ${agentId}`);
     });
 
     this.on("context:analyze", (data) => {
-      console.log(`[AGENT] 上下文分析完成, 识别${data.keyPoints}个关键点`);
+      this.debugLog(`[AGENT] 上下文分析完成, 识别${data.keyPoints}个关键点`);
     });
 
     // 串行执行事件处理
     this.on("serial:start", (data) => {
-      console.log(
+      this.debugLog(
         `[AGENT] 执行开始: ${data.totalTasks}个子任务, 模式: ${data.executionMode}`
       );
     });
 
     this.on("serial:task:start", (data) => {
-      console.log(
+      this.debugLog(
         `[AGENT] 子任务 ${data.taskIndex}/${data.totalTasks} 开始: ${data.description}`
       );
     });
 
     this.on("serial:task:complete", (data) => {
-      console.log(`[AGENT] 子任务 ${data.taskIndex} 完成`);
+      this.debugLog(`[AGENT] 子任务 ${data.taskIndex} 完成`);
     });
 
     this.on("serial:task:failed", (data) => {
-      console.log(`[AGENT] 子任务 ${data.taskIndex} 失败: ${data.error}`);
+      this.debugLog(`[AGENT] 子任务 ${data.taskIndex} 失败: ${data.error}`);
     });
 
     this.on("serial:complete", (data) => {
-      console.log(
+      this.debugLog(
         `[AGENT] 执行完成: ${
           this.config.isConcurrency ? data.totalTasks : data.completedTasks
         }/${data.totalTasks} 成功, 耗时: ${data.executionTime}ms`
@@ -178,7 +190,7 @@ class WKAgent extends EventEmitter {
       } else {
         // Node.js环境 - 使用内存模拟（实际项目中可使用文件存储）
         // TODO，node env
-        console.log("[AGENT] 运行在Node.js环境，使用内存模拟持久化");
+      this.debugLog("[AGENT] 运行在Node.js环境，使用内存模拟持久化");
       }
     } catch (error) {
       console.warn("[AGENT] 持久化初始化失败:", error.message);
@@ -216,7 +228,7 @@ class WKAgent extends EventEmitter {
     if (this.serialExecution) {
       this.serialExecution.isPaused = true;
       this.emit("serial:paused");
-      console.log("[AGENT] 串行执行已暂停");
+      this.debugLog("[AGENT] 串行执行已暂停");
     }
   }
 
@@ -224,7 +236,7 @@ class WKAgent extends EventEmitter {
     if (this.serialExecution) {
       this.serialExecution.isPaused = false;
       this.emit("serial:resumed");
-      console.log("[AGENT] 串行执行已恢复");
+      this.debugLog("[AGENT] 串行执行已恢复");
     }
   }
 
@@ -232,7 +244,7 @@ class WKAgent extends EventEmitter {
     if (this.serialExecution) {
       this.serialExecution.isCancelled = true;
       this.emit("serial:cancelled");
-      console.log("[AGENT] 串行执行已取消");
+      this.debugLog("[AGENT] 串行执行已取消");
     }
   }
 
@@ -307,7 +319,7 @@ class WKAgent extends EventEmitter {
           contextAnalysis
         );
 
-        console.log("need decomposition", taskAnalysis.needsDecomposition);
+        this.debugLog("need decomposition", taskAnalysis.needsDecomposition);
 
         if (taskAnalysis.needsDecomposition) {
           result = await this.executeWithSubAgents(
@@ -556,7 +568,7 @@ class WKAgent extends EventEmitter {
 
     // 🔥 如果用户禁用了智能分解，直接进行基础分析
     if (!this.config.task.enableSmartDecomposition) {
-      console.log("[AGENT] 智能任务分解已禁用，使用基础分析");
+      this.debugLog("[AGENT] 智能任务分解已禁用，使用基础分析");
       const basicAnalysis = this.basicTaskAnalysis(
         currentPrompt,
         contextAnalysis
@@ -578,7 +590,7 @@ class WKAgent extends EventEmitter {
 
     // 如果预分析确定为简单任务，直接返回结果
     if (quickAnalysis.confidence > 0.8) {
-      console.log("[AGENT] 使用快速任务分析结果:", quickAnalysis.reason);
+      this.debugLog("[AGENT] 使用快速任务分析结果:", quickAnalysis.reason);
       // 应用用户的子任务数量限制
       quickAnalysis.estimatedSubTasks = Math.min(
         quickAnalysis.estimatedSubTasks,
@@ -679,7 +691,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         }
       }
 
-      console.log("[AGENT] 深度任务分析结果:", {
+      this.debugLog("[AGENT] 深度任务分析结果:", {
         complexity: enhancedAnalysis.complexity,
         needsDecomposition: enhancedAnalysis.needsDecomposition,
         estimatedSubTasks: enhancedAnalysis.estimatedSubTasks,
@@ -1090,14 +1102,14 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
     // 智能校验和调整
     if (enhanced.complexity === "low" && enhanced.estimatedSubTasks > 2) {
-      console.log("[AGENT] 校正：低复杂度任务子任务数量过多，调整为1");
+      this.debugLog("[AGENT] 校正：低复杂度任务子任务数量过多，调整为1");
       enhanced.estimatedSubTasks = 1;
       enhanced.needsDecomposition = false;
       enhanced.reason += " (校正：低复杂度任务不需要分解)";
     }
 
     if (enhanced.complexity === "high" && enhanced.estimatedSubTasks < 3) {
-      console.log("[AGENT] 校正：高复杂度任务子任务数量不足，调整为最少3个");
+      this.debugLog("[AGENT] 校正：高复杂度任务子任务数量不足，调整为最少3个");
       enhanced.estimatedSubTasks = 3;
       enhanced.needsDecomposition = true;
       enhanced.reason += " (校正：高复杂度任务需要充分分解)";
@@ -1106,13 +1118,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     // 基于prompt长度进行二次验证
     const promptLength = prompt.length;
     if (promptLength < 20 && enhanced.estimatedSubTasks > 1) {
-      console.log("[AGENT] 校正：超短prompt不需要分解");
+      this.debugLog("[AGENT] 校正：超短prompt不需要分解");
       enhanced.estimatedSubTasks = 1;
       enhanced.needsDecomposition = false;
     }
 
     if (promptLength > 500 && enhanced.estimatedSubTasks < 2) {
-      console.log("[AGENT] 校正：长prompt建议分解处理");
+      this.debugLog("[AGENT] 校正：长prompt建议分解处理");
       enhanced.estimatedSubTasks = Math.max(2, enhanced.estimatedSubTasks);
       enhanced.needsDecomposition = true;
     }
@@ -1126,7 +1138,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
     // 如果限制后的子任务数量发生变化，更新相关状态
     if (enhanced.estimatedSubTasks !== originalSubTasks) {
-      console.log(
+      this.debugLog(
         `[AGENT] 应用用户配置限制：子任务数量从 ${originalSubTasks} 调整为 ${enhanced.estimatedSubTasks}`
       );
       enhanced.needsDecomposition = enhanced.estimatedSubTasks > 1;
@@ -1272,6 +1284,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       contextAnalysis
     );
     //agent
+    this.debugLog("--subTasks--", subTasks);
     // 🔥 提取JSON要求，用于结果综合时的提醒
     let jsonRequirement = null;
     if (this.config.forceJSON) {
@@ -1280,6 +1293,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         throw new Error("forceJSON模式启用但prompt中没有找到有效的JSON结构");
       }
       this.config.jsonSuffix = jsonRequirement;
+      this.debugLog("--jsonRequirement--", jsonRequirement);
     }
 
     // 初始化串行执行状态
@@ -1375,13 +1389,13 @@ ${JSON.stringify(contextAnalysis, null, 2)}
 
           subResults.push(result);
         } catch (error) {
-          console.log(
+          this.debugLog(
             "[DEBUG] Caught error in task",
             i + 1,
             ":",
             error.message
           );
-          console.log("[DEBUG] Error stack:", error.stack);
+          this.debugLog("[DEBUG] Error stack:", error.stack);
 
           serialExecution.failedTasks++;
           this.emit("serial:task:error", {
@@ -1592,7 +1606,7 @@ ${taskAnalysis.originalPrompt}
    * 结果汇总（增强版）
    */
   async synthesizeResults(subResults, taskAnalysis, contextAnalysis) {
-    console.log("[DEBUG] synthesizeResults called with:", {
+    this.debugLog("[DEBUG] synthesizeResults called with:", {
       subResultsCount: subResults.length,
       subResults: subResults.map((r) => ({
         success: r.success,
@@ -1605,7 +1619,7 @@ ${taskAnalysis.originalPrompt}
 
     const successfulResults = subResults.filter((r) => r.success);
 
-    console.log("[DEBUG] successfulResults:", {
+    this.debugLog("[DEBUG] successfulResults:", {
       count: successfulResults.length,
       results: successfulResults.map((r) => ({
         subTaskId: r.subTaskId,
@@ -1625,7 +1639,6 @@ ${taskAnalysis.originalPrompt}
     // 智能汇总：使用LLM进行结果整合
     if (successfulResults.length > 1) {
       try {
-        //TODO3，在合并结果这一块儿
         return await this.intelligentSynthesis(
           successfulResults,
           taskAnalysis,
@@ -2411,7 +2424,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
 
       if (!result.success) {
         if (result.fallback) {
-          console.log("[AGENT] 使用回退模式处理");
+          this.debugLog("[AGENT] 使用回退模式处理");
           return this.fallbackResponse(messages);
         }
         throw new Error(`LLM API调用失败: ${result.error}`);
@@ -2428,7 +2441,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
    * 强制JSON格式转换 - 新增核心方法
    */
   async enforceJSONFormat(result, taskAnalysis, contextAnalysis) {
-    console.log("[AGENT] 强制执行JSON格式转换");
+    this.debugLog("[AGENT] 强制执行JSON格式转换");
 
     try {
       // 🔥 关键改进：优先提取最干净的JSON，类似task1的效果
@@ -2448,12 +2461,12 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
 
         // 如果明确要求JSON或检测到JSON标记，优先直接提取
         if (hasExplicitJSONRequest || hasJSONMarkers) {
-          console.log("[AGENT] 检测到明确JSON需求，优先直接提取");
+          this.debugLog("[AGENT] 检测到明确JSON需求，优先直接提取");
           let extractedJSON = JSONParser.extractJSON(contentToExtract);
 
           // 🔥 修复：如果直接提取失败，尝试更智能的提取策略
           if (!extractedJSON && contentToExtract.includes("```json")) {
-            console.log("[AGENT] 直接提取失败，尝试代码块专项提取");
+            this.debugLog("[AGENT] 直接提取失败，尝试代码块专项提取");
 
             // 专项提取代码块中的JSON
             const codeBlockMatch = contentToExtract.match(
@@ -2461,7 +2474,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
             );
             if (codeBlockMatch) {
               const codeBlockContent = codeBlockMatch[1].trim();
-              console.log(
+              this.debugLog(
                 "[AGENT] 提取代码块内容，长度:",
                 codeBlockContent.length
               );
@@ -2469,9 +2482,9 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
               // 尝试解析代码块内容
               try {
                 extractedJSON = JSON.parse(codeBlockContent);
-                console.log("[AGENT] 代码块JSON.parse成功");
+                this.debugLog("[AGENT] 代码块JSON.parse成功");
               } catch (parseError) {
-                console.log(
+                this.debugLog(
                   "[AGENT] 代码块JSON.parse失败，尝试jsonrepair:",
                   parseError.message
                 );
@@ -2480,9 +2493,9 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
                   const { default: jsonrepair } = await import("jsonrepair");
                   const repairedJSON = jsonrepair(codeBlockContent);
                   extractedJSON = JSON.parse(repairedJSON);
-                  console.log("[AGENT] jsonrepair修复成功");
+                  this.debugLog("[AGENT] jsonrepair修复成功");
                 } catch (repairError) {
-                  console.log(
+                  this.debugLog(
                     "[AGENT] jsonrepair修复失败:",
                     repairError.message
                   );
@@ -2492,7 +2505,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
           }
 
           if (extractedJSON && Object.keys(extractedJSON).length > 0) {
-            console.log("[AGENT] 成功提取干净JSON结构，类似task1效果");
+            this.debugLog("[AGENT] 成功提取干净JSON结构，类似task1效果");
             // 🔥 关键：直接返回简洁结构，类似task1
             return {
               ...result,
@@ -2521,7 +2534,7 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       }
 
       // 强制创建JSON响应（回退方案）
-      console.log("[AGENT] 使用回退方案创建JSON结构");
+      this.debugLog("[AGENT] 使用回退方案创建JSON结构");
       const forcedJSON = await this.createForcedJSONResponse(
         result,
         taskAnalysis,
