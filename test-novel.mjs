@@ -12,6 +12,7 @@ async function testSerialDebug() {
   console.log("=== 并行和串行执行配置调试 ===\n");
 
   //并行多子agent
+  /*
   let agent = new WKAgent({
     isConcurrency: true,
     isHistoryAnalysis: false,
@@ -19,6 +20,7 @@ async function testSerialDebug() {
     maxSubTasks: 3,
     isDebug: false,
   });
+  */
 
   /*
   //串行多agent
@@ -38,7 +40,6 @@ async function testSerialDebug() {
   });
   */
 
-  /*
   //串行单agent
   let agent = new WKAgent({
     isConcurrency: false,
@@ -47,7 +48,6 @@ async function testSerialDebug() {
     maxSubTasks: 1,
     isDebug: true,
   });
-  */
 
   // 监听事件以确认执行模式
   agent.on("serial:start", (data) => {
