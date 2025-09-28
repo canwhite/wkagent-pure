@@ -13,6 +13,11 @@ async function testJSONResponse() {
   console.log("=== 测试JSON响应功能 ===\n");
 
   const agent = new WKAgent({
+    isConcurrency: true,
+    isHistoryAnalysis: false,
+    forceJSON: true,
+    maxSubTasks: 3,
+    isDebug: true,
     llm: {
       apiKey: process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
       temperature: 0.7,
@@ -22,11 +27,6 @@ async function testJSONResponse() {
       compressThreshold: 15,
       enableLLMCompression: false,
       enablePersistence: false,
-    },
-    task: {
-      maxSubTasks: 1,
-      enableConcurrency: false,
-      enableSmartDecomposition: false,
     },
   });
 
