@@ -449,7 +449,8 @@ class WKAgent extends EventEmitter {
       const parseResult = JSONParser.safeParse(response, { fallback: {} });
 
       if (!parseResult.success) {
-        throw new Error(`JSON解析失败: ${parseResult.error}`);
+        console.warn(`[AGENT] JSON解析失败，使用基础分析: ${parseResult.error}`);
+        return this.basicContextAnalysis(prompt, recentHistory);
       }
 
       const analysis = parseResult.data;
@@ -659,7 +660,8 @@ ${JSON.stringify(contextAnalysis, null, 2)}
       const parseResult = JSONParser.safeParse(response, { fallback: {} });
 
       if (!parseResult.success) {
-        throw new Error(`JSON解析失败: ${parseResult.error}`);
+        console.warn(`[AGENT] 任务分析JSON解析失败，使用基础分析: ${parseResult.error}`);
+        return this.basicTaskAnalysis(currentPrompt, contextAnalysis);
       }
 
       const analysis = parseResult.data;
@@ -683,6 +685,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
         // 如果用户强制限制为1个子任务，但原分析显示需要分解，
         // 我们仍然标记为需要分解，但限制子任务数量为1
         if (originalSubTasks > 1) {
+          enhancedAnalysis.needsDecomposition = true; // 保持需要分解状态
           enhancedAnalysis.reason +=
             " (用户配置限制：最多1个子任务，但仍需结构化处理)";
         } else {
@@ -1288,7 +1291,7 @@ ${JSON.stringify(contextAnalysis, null, 2)}
     // 🔥 提取JSON要求，用于结果综合时的提醒
     let jsonRequirement = null;
     if (this.config.forceJSON) {
-      const jsonRequirement = this.extractOuterBracesContent(prompt);
+      jsonRequirement = this.extractOuterBracesContent(prompt);
       if (!jsonRequirement) {
         throw new Error("forceJSON模式启用但prompt中没有找到有效的JSON结构");
       }
@@ -1336,9 +1339,22 @@ ${JSON.stringify(contextAnalysis, null, 2)}
           break;
         }
 
-        // 检查暂停状态
-        while (serialExecution.isPaused) {
+        // 检查暂停状态，添加超时机制
+        let pauseWaitTime = 0;
+        const maxPauseWaitTime = 300000; // 5分钟超时
+        while (serialExecution.isPaused && pauseWaitTime < maxPauseWaitTime) {
           await new Promise((resolve) => setTimeout(resolve, 100));
+          pauseWaitTime += 100;
+        }
+        
+        // 如果等待超时，取消执行
+        if (pauseWaitTime >= maxPauseWaitTime) {
+          serialExecution.isCancelled = true;
+          this.emit("serial:timeout", {
+            reason: "暂停超时，自动取消执行",
+            pauseDuration: pauseWaitTime,
+          });
+          break;
         }
 
         try {
@@ -1496,6 +1512,13 @@ ${taskAnalysis.originalPrompt}
         (task) =>
           task && typeof task === "object" && task.id && task.description
       );
+
+      // 确保至少有最小数量的有效子任务
+      const minValidSubTasks = Math.min(2, taskAnalysis.estimatedSubTasks);
+      if (validSubTasks.length < minValidSubTasks) {
+        console.warn(`[AGENT] 有效子任务数量不足，使用基础分解。有效: ${validSubTasks.length}, 期望最小: ${minValidSubTasks}`);
+        return this.basicDecomposeTask(taskAnalysis);
+      }
 
       return validSubTasks.length > 0
         ? validSubTasks
@@ -2126,17 +2149,19 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
 
     for (const summary of this.mediumTerm.slice(-5)) {
       if (summary.keyPoints) {
-        const relevance =
-          contextAnalysis.keyPoints?.reduce((score, point) => {
-            return (
-              score +
-              summary.keyPoints.reduce(
-                (kpScore, kp) => kpScore + this.calculateRelevance(point, kp),
-                0
-              ) /
-                summary.keyPoints.length
-            );
-          }, 0) / (contextAnalysis.keyPoints?.length || 1);
+        const keyPointsLength = summary.keyPoints.length;
+        const relevance = keyPointsLength > 0
+          ? contextAnalysis.keyPoints?.reduce((score, point) => {
+              return (
+                score +
+                summary.keyPoints.reduce(
+                  (kpScore, kp) => kpScore + this.calculateRelevance(point, kp),
+                  0
+                ) /
+                  keyPointsLength
+              );
+            }, 0) / (contextAnalysis.keyPoints?.length || 1)
+          : 0;
 
         if (relevance > 0.3) {
           relevant.push(summary.content || JSON.stringify(summary.summary));
@@ -2243,12 +2268,16 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       }
     }
 
-    // 限制长期记忆大小
+    // 限制长期记忆大小并更新相关统计
     if (this.longTerm.size > 50) {
       const entries = Array.from(this.longTerm.entries());
-      const toKeep = entries.slice(-30); // 保留最新的30条
+      const toKeep = entries.slice(-30);
       this.longTerm.clear();
       toKeep.forEach(([k, v]) => this.longTerm.set(k, v));
+      
+      // 更新内存统计
+      this.memoryStats.totalMessages = Math.max(0, this.memoryStats.totalMessages - (entries.length - toKeep.length));
+      this.debugLog(`[AGENT] 长期记忆已清理，保留 ${toKeep.length}/${entries.length} 条记录`);
     }
   }
 
