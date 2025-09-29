@@ -505,12 +505,14 @@ class WKAgent extends EventEmitter {
    */
   buildEnhancedMessageHistory(currentPrompt, options, contextAnalysis) {
     const messages = [];
+    const maxTokenLimit = this.config.llm.maxTokens;
+    const safetyBuffer = 1000; // 安全缓冲区，为回复预留空间
 
-    // 系统提示 - 增强版
-    messages.push({
-      role: "system",
-      content: this.buildEnhancedSystemPrompt(options, contextAnalysis),
-    });
+    // 构建统一的系统消息内容
+    const systemContentParts = [];
+
+    // 基础系统提示
+    systemContentParts.push(this.buildEnhancedSystemPrompt(options, contextAnalysis));
 
     // 长期记忆（关键信息）- 基于上下文分析筛选
     if (this.longTerm.size > 0 && contextAnalysis.keyPoints?.length > 0) {
@@ -518,10 +520,7 @@ class WKAgent extends EventEmitter {
         contextAnalysis.keyPoints
       );
       if (relevantLongTerm.length > 0) {
-        messages.push({
-          role: "system",
-          content: `关键背景信息:\n${relevantLongTerm.join("\n")}`,
-        });
+        systemContentParts.push(`关键背景信息:\n${relevantLongTerm.join("\n")}`);
       }
     }
 
@@ -529,33 +528,58 @@ class WKAgent extends EventEmitter {
     if (this.mediumTerm.length > 0) {
       const relevantSummaries = this.selectRelevantSummaries(contextAnalysis);
       if (relevantSummaries.length > 0) {
-        messages.push({
-          role: "system",
-          content: `相关历史摘要:\n${relevantSummaries.join("\n")}`,
-        });
+        systemContentParts.push(`相关历史摘要:\n${relevantSummaries.join("\n")}`);
       }
     }
 
-    // 短期记忆（最近对话）- 基于相关性过滤
-    const relevantRecentMessages = this.selectRelevantRecentMessages(
-      currentPrompt,
-      contextAnalysis
-    );
-    messages.push(...relevantRecentMessages);
-
     // 上下文分析结果注入
     if (contextAnalysis.recommendations?.length > 0) {
+      systemContentParts.push(`上下文建议: ${contextAnalysis.recommendations.join(", ")}`);
+    }
+
+    // 添加统一的系统消息（带长度检查）
+    const systemContent = systemContentParts.join("\n\n");
+    const estimatedSystemTokens = this.estimateTokenUsage(systemContent);
+    
+    if (estimatedSystemTokens < maxTokenLimit - safetyBuffer) {
       messages.push({
         role: "system",
-        content: `上下文建议: ${contextAnalysis.recommendations.join(", ")}`,
+        content: systemContent,
       });
+    } else {
+      // 系统消息过长，进行智能截断
+      const truncatedSystemContent = this.truncateContentToTokenLimit(
+        systemContent, 
+        maxTokenLimit - safetyBuffer
+      );
+      messages.push({
+        role: "system",
+        content: truncatedSystemContent,
+      });
+      this.debugLog("[AGENT] 系统消息过长，已智能截断");
     }
+
+    // 短期记忆（最近对话）- 基于相关性过滤和长度控制
+    // 放在系统消息之后，当前用户输入之前，作为上下文
+    const relevantRecentMessages = this.selectRelevantRecentMessagesWithLengthControl(
+      currentPrompt,
+      contextAnalysis,
+      maxTokenLimit - safetyBuffer - this.estimateTokenUsage(systemContent)
+    );
+    messages.push(...relevantRecentMessages);
 
     // 当前用户输入
     messages.push({
       role: "user",
       content: currentPrompt,
     });
+
+    // 最终长度检查
+    const totalTokens = this.estimateTotalMessageTokens(messages);
+    if (totalTokens > maxTokenLimit - safetyBuffer) {
+      this.debugLog(`[AGENT] 消息总长度超出限制，进行优化。当前: ${totalTokens}, 限制: ${maxTokenLimit - safetyBuffer}`);
+      return this.optimizeMessagesByPriority(messages, maxTokenLimit - safetyBuffer);
+    }
 
     return messages;
   }
@@ -1581,11 +1605,29 @@ ${taskAnalysis.originalPrompt}
             .join("\n\n")}\n\n请基于以上前置结果继续完成当前子任务。`
         : "这是第一个子任务，请独立完成。";
 
-    const subMessages = [
-      parentMessages[0], // 系统提示
-      {
-        role: "system",
-        content: `你是一个专业的子任务执行代理。请专注完成分配的具体子任务。
+    // 构建优化的子任务消息，避免冗余
+    const subMessages = [];
+
+    // 如果原始系统提示存在且不是通用的，则包含它
+    const originalSystemPrompt = parentMessages[0]?.content || "";
+    const isGenericPrompt = originalSystemPrompt.includes("智能助手") || 
+                           originalSystemPrompt.length < 50;
+    
+    if (!isGenericPrompt) {
+      // 提取原始系统提示的核心信息，避免重复
+      const coreSystemInfo = this.extractCoreSystemInfo(originalSystemPrompt);
+      if (coreSystemInfo) {
+        subMessages.push({
+          role: "system",
+          content: coreSystemInfo,
+        });
+      }
+    }
+
+    // 子任务专用系统提示
+    subMessages.push({
+      role: "system",
+      content: `你是一个专业的子任务执行代理。请专注完成以下具体子任务：
 
 子任务信息：
 - 任务ID: ${subTask.id}
@@ -1598,12 +1640,13 @@ ${taskAnalysis.originalPrompt}
 3. 保持与主任务目标的一致性
 4. 基于前置结果进行衔接和整合
 5. 如有需要，可以请求额外信息`,
-      },
-      {
-        role: "user",
-        content: `${previousResultsInfo}\n\n执行子任务：${subTask.description}\n\n这是主任务的一部分，请专注完成这个具体子任务。`,
-      },
-    ];
+    });
+
+    // 用户输入，包含前置结果和子任务描述
+    subMessages.push({
+      role: "user",
+      content: `${previousResultsInfo}\n\n子任务描述：${subTask.description}\n\n请专注完成这个子任务。`,
+    });
 
     try {
       const response = await this.callLLM(subMessages);
@@ -2195,7 +2238,61 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
       content: m.content,
     }));
 
-    return [...new Set([...relevant, ...guaranteedRecent])];
+    // 正确的去重方法：基于内容的唯一性
+    const combined = [...relevant, ...guaranteedRecent];
+    const uniqueMessages = this.deduplicateMessages(combined);
+    
+    return uniqueMessages;
+  }
+
+  /**
+   * 消息去重方法
+   */
+  deduplicateMessages(messages) {
+    const seen = new Set();
+    const unique = [];
+    
+    for (const message of messages) {
+      // 创建基于角色和内容的唯一标识
+      const contentKey = message.role + ":" + message.content.trim();
+      
+      if (!seen.has(contentKey)) {
+        seen.add(contentKey);
+        unique.push(message);
+      }
+    }
+    
+    return unique;
+  }
+
+  /**
+   * 提取系统提示的核心信息
+   */
+  extractCoreSystemInfo(systemPrompt) {
+    if (!systemPrompt || systemPrompt.length < 30) {
+      return null;
+    }
+
+    // 提取关键配置信息，排除通用描述
+    const lines = systemPrompt.split('\n');
+    const coreInfo = lines
+      .filter(line => {
+        // 保留具体的配置和约束信息
+        return line.includes('配置') || 
+               line.includes('要求') || 
+               line.includes('限制') || 
+               line.includes('模式') ||
+               line.includes('格式') ||
+               line.includes('注意');
+      })
+      .join('\n');
+
+    // 如果没有找到特定信息，且原提示较长，则返回截断版本
+    if (!coreInfo && systemPrompt.length > 100) {
+      return `核心系统要求：${systemPrompt.substring(0, 150)}...`;
+    }
+
+    return coreInfo || null;
   }
 
   /**
@@ -2427,6 +2524,152 @@ ${contextInfo.length > 0 ? "上下文信息:\n" + contextInfo.join("\n") : ""}
     );
     const compressedSize = compressedContent.length;
     return Math.round((1 - compressedSize / originalSize) * 100);
+  }
+
+  /**
+   * 辅助方法：估算总消息token数
+   */
+  estimateTotalMessageTokens(messages) {
+    return messages.reduce((total, message) => {
+      return total + this.estimateTokenUsage(message.content);
+    }, 0);
+  }
+
+  /**
+   * 辅助方法：按token限制截断内容
+   */
+  truncateContentToTokenLimit(content, maxTokens) {
+    const estimatedTokens = this.estimateTokenUsage(content);
+    if (estimatedTokens <= maxTokens) {
+      return content;
+    }
+
+    // 按比例截断
+    const ratio = maxTokens / estimatedTokens;
+    const targetLength = Math.floor(content.length * ratio);
+    
+    // 尝试在句子边界截断
+    const truncated = content.substring(0, targetLength);
+    const lastSentenceEnd = Math.max(
+      truncated.lastIndexOf('。'),
+      truncated.lastIndexOf('！'),
+      truncated.lastIndexOf('？'),
+      truncated.lastIndexOf('.'),
+      truncated.lastIndexOf('!'),
+      truncated.lastIndexOf('?')
+    );
+    
+    if (lastSentenceEnd > targetLength * 0.8) {
+      return content.substring(0, lastSentenceEnd + 1) + "\n\n[内容已截断以符合长度限制]";
+    }
+    
+    return truncated + "...[内容已截断]";
+  }
+
+  /**
+   * 辅助方法：带长度控制的相关消息选择
+   */
+  selectRelevantRecentMessagesWithLengthControl(currentPrompt, contextAnalysis, remainingTokenLimit) {
+    const recentMessages = this.shortTerm.slice(-15);
+    const relevant = [];
+    let usedTokens = 0;
+
+    // 按相关性排序
+    const sortedMessages = recentMessages
+      .map(message => ({
+        message,
+        relevance: this.calculateRelevance(message.content, currentPrompt)
+      }))
+      .sort((a, b) => b.relevance - a.relevance);
+
+    for (const { message, relevance } of sortedMessages) {
+      if (usedTokens >= remainingTokenLimit) break;
+
+      const messageTokens = this.estimateTokenUsage(message.content);
+      if (relevance > 0.2 || message.role === "user") {
+        if (usedTokens + messageTokens <= remainingTokenLimit) {
+          relevant.push({
+            role: message.role,
+            content: message.content,
+          });
+          usedTokens += messageTokens;
+        } else {
+          // 部分添加
+          const remainingTokens = remainingTokenLimit - usedTokens;
+          if (remainingTokens > 50) { // 至少50个字符
+            const truncatedContent = this.truncateContentToTokenLimit(
+              message.content, 
+              remainingTokens
+            );
+            relevant.push({
+              role: message.role,
+              content: truncatedContent,
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // 确保至少有最近的用户消息
+    if (relevant.length === 0) {
+      const lastUserMessage = recentMessages
+        .slice(-5)
+        .reverse()
+        .find(m => m.role === "user");
+      
+      if (lastUserMessage) {
+        const truncatedContent = this.truncateContentToTokenLimit(
+          lastUserMessage.content,
+          Math.min(200, remainingTokenLimit)
+        );
+        relevant.push({
+          role: "user",
+          content: truncatedContent,
+        });
+      }
+    }
+
+    return relevant;
+  }
+
+  /**
+   * 辅助方法：按优先级优化消息
+   */
+  optimizeMessagesByPriority(messages, maxTokens) {
+    const priority = {
+      'system': 1,      // 最高优先级
+      'user': 2,       // 高优先级
+      'assistant': 3    // 低优先级
+    };
+
+    const optimized = [];
+    let usedTokens = 0;
+
+    // 按优先级排序
+    const sortedMessages = [...messages].sort((a, b) => {
+      return priority[a.role] - priority[b.role];
+    });
+
+    for (const message of sortedMessages) {
+      const messageTokens = this.estimateTokenUsage(message.content);
+      
+      if (usedTokens + messageTokens <= maxTokens) {
+        optimized.push(message);
+        usedTokens += messageTokens;
+      } else {
+        const remainingTokens = maxTokens - usedTokens;
+        if (remainingTokens > 50) {
+          optimized.push({
+            ...message,
+            content: this.truncateContentToTokenLimit(message.content, remainingTokens)
+          });
+          break;
+        }
+      }
+    }
+
+    return optimized;
   }
 
   /**
