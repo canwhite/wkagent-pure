@@ -12,16 +12,16 @@ async function testSerialDebug() {
   console.log("=== 并行和串行执行配置调试 ===\n");
 
   //串行单子agent
-  let agent = new WKAgent({
-    isConcurrency: false,
-    isHistoryAnalysis: false,
-    forceJSON: true,
-    maxSubTasks: 1,
-    isDebug: true,
-  });
+  // let agent = new WKAgent({
+  //   isConcurrency: false,
+  //   isHistoryAnalysis: false,
+  //   forceJSON: true,
+  //   maxSubTasks: 1,
+  //   isDebug: true,
+  // });
 
   //并行多子agent
-  /*=================================================
+
   let agent = new WKAgent({
     isConcurrency: true,
     isHistoryAnalysis: false,
@@ -29,7 +29,7 @@ async function testSerialDebug() {
     maxSubTasks: 3,
     isDebug: false,
   });
-  ===================================================*/
+
   //串行多子agent
   /*==================================================
   let agent = new WKAgent({
